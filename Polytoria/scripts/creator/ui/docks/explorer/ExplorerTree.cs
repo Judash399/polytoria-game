@@ -7,6 +7,7 @@ using Polytoria.Datamodel;
 using Polytoria.Datamodel.Creator;
 using Polytoria.Shared;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using Script = Polytoria.Datamodel.Script;
@@ -119,6 +120,129 @@ public partial class ExplorerTree : Tree
 		return true;
 	}
 
+	private Script CreateScript(ScriptTypeEnum st, string file, string name, Instance target)
+	{
+		Script s;
+
+		if (st == ScriptTypeEnum.Server)
+		{
+			s = Root.New<ServerScript>();
+		}
+		else if (st == ScriptTypeEnum.Client)
+		{
+			s = Root.New<ClientScript>();
+		}
+		else
+		{
+			s = Root.New<ModuleScript>();
+		}
+
+		s.LinkedScript = Root.Assets.GetFileLinkByPath(file);
+		s.Name = name;
+
+		s.Parent = target;
+
+		return s;
+	}
+
+
+	private void InsertDirectory(string file, Instance target, bool? isRoot)
+	{
+		// Make sure it doesnt end with a /
+		// Ex: "scripts/" turns into "scripts"
+		file = file.TrimEnd('/', '\\');
+
+		string fileExt = file.GetExtension();
+
+		if (Globals.ScriptFileExtensions.Contains(fileExt))
+		{
+			ScriptTypeEnum st = CreatorService.GetScriptTypeFromPath(file);
+			string name = CreatorService.GetScriptNameFromPath(file);
+			CreateScript(st, file, name, target);
+		}
+		else if (fileExt == Globals.ModelFileExtension)
+		{
+			_ = Root.LinkedSession.InsertModel(file, target);
+		}
+		else
+		{
+
+			string fullPath = Path.Combine(Root.LinkedSession.ProjectFolderPath, file);
+
+			string[] childFiles = Directory.GetFiles(fullPath);
+
+			string initChild = null;
+			foreach (string fullChildPath in childFiles)
+			{
+				string childFullName = Path.GetFileName(fullChildPath);
+				string childPath = Path.Combine(file, childFullName);
+
+				string childName = Path.GetFileNameWithoutExtension(childFullName);
+
+				if (childFullName == "init.luau")
+				{
+					initChild = childPath;
+					break;
+				}
+			}
+
+			Instance? obj = null;
+
+			string folderName = Path.GetFileName(file);
+			if (initChild != null)
+			{
+				// Have to add .luau extention so function doesnt error.
+				ScriptTypeEnum st = CreatorService.GetScriptTypeFromPath(file + ".luau");
+
+				folderName = Path.GetFileNameWithoutExtension(file);
+
+				obj = CreateScript(st, initChild, folderName, target);
+			}
+			else
+			{
+				Folder f = Root.New<Folder>();
+				f.Name = folderName;
+				f.Parent = target;
+
+				obj = (Instance)f;
+			}
+
+			if (isRoot == true)
+			{
+				Root.CreatorContext.Selections.Select(obj);
+			}
+
+			string[] childDirectories = Directory.GetDirectories(fullPath);
+
+			foreach (string fullChildPath in childDirectories)
+			{
+				string childFullName = Path.GetFileName(fullChildPath);
+				string childPath = Path.Combine(file, childFullName).Replace('\\', '/'); ;
+
+				InsertDirectory(childPath, obj, false);
+			}
+
+			foreach (string fullChildPath in childFiles)
+			{
+				string extension = Path.GetExtension(fullChildPath);
+				if (extension == ".meta")
+				{
+					continue;
+				}
+				string childFullName = Path.GetFileName(fullChildPath);
+
+				if (childFullName == "init.luau")
+				{
+					continue;
+				}
+
+				string childPath = Path.Combine(file, childFullName).Replace('\\', '/'); ;
+
+				InsertDirectory(childPath, obj, false);
+			}
+		}
+	}
+
 	public override void _DropData(Vector2 atPosition, Variant data)
 	{
 		CreatorHistory history = Root.CreatorContext.History;
@@ -147,48 +271,12 @@ public partial class ExplorerTree : Tree
 		}
 		else if (dragData is FileDragData fileDrag)
 		{
-			if (fileDrag.Files.Length == 1)
+			Root.CreatorContext.Selections.DeselectAll();
+			Root.PlayerGUI.GrabFocus();
+
+			foreach (string file in fileDrag.Files)
 			{
-				string file = fileDrag.Files[0];
-				string fileExt = file.GetExtension();
-
-				if (Globals.ScriptFileExtensions.Contains(fileExt))
-				{
-					bool createAsChild = true;
-					string n = CreatorService.GetScriptNameFromPath(file);
-					ScriptTypeEnum st = CreatorService.GetScriptTypeFromPath(file);
-
-					if (createAsChild)
-					{
-						Script s;
-
-						if (st == ScriptTypeEnum.Server)
-						{
-							s = Root.New<ServerScript>();
-						}
-						else if (st == ScriptTypeEnum.Client)
-						{
-							s = Root.New<ClientScript>();
-						}
-						else
-						{
-							s = Root.New<ModuleScript>();
-						}
-
-						s.LinkedScript = Root.Assets.GetFileLinkByPath(file);
-						s.Name = n.ToPascalCase();
-
-						s.Parent = target;
-						Root.CreatorContext.Selections.DeselectAll();
-						Root.CreatorContext.Selections.Select(s);
-					}
-				}
-				else if (fileExt == Globals.ModelFileExtension)
-				{
-					_ = Root.LinkedSession.InsertModel(file, target);
-				}
-
-				Root.PlayerGUI.GrabFocus();
+				InsertDirectory(file, target, true);
 			}
 		}
 		else
