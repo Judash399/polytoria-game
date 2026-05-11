@@ -11,6 +11,8 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using Script = Polytoria.Datamodel.Script;
+using Polytoria.Utils;
+using System.Threading.Tasks;
 
 namespace Polytoria.Creator.UI;
 
@@ -120,126 +122,134 @@ public partial class ExplorerTree : Tree
 		return true;
 	}
 
-	private Script CreateScript(ScriptTypeEnum st, string file, string name, Instance target)
+	// Creates a script instance bound to a script file.
+	private Script CreateScript(ScriptTypeEnum scriptType, string file, string name, Instance target)
 	{
-		Script s;
+		Script script;
 
-		if (st == ScriptTypeEnum.Server)
+		if (scriptType == ScriptTypeEnum.Server)
 		{
-			s = Root.New<ServerScript>();
+			script = Root.New<ServerScript>();
 		}
-		else if (st == ScriptTypeEnum.Client)
+		else if (scriptType == ScriptTypeEnum.Client)
 		{
-			s = Root.New<ClientScript>();
+			script = Root.New<ClientScript>();
 		}
 		else
 		{
-			s = Root.New<ModuleScript>();
+			script = Root.New<ModuleScript>();
 		}
 
-		s.LinkedScript = Root.Assets.GetFileLinkByPath(file);
-		s.Name = name;
+		script.LinkedScript = Root.Assets.GetFileLinkByPath(file);
+		script.Name = name;
 
-		s.Parent = target;
+		script.Parent = target;
 
-		return s;
+		return script;
 	}
 
-
-	private void InsertDirectory(string file, Instance target, bool? isRoot)
+	// Recursivly Inserts files using the standard Rojo/Luau directory system.
+	// Folders with an init.luau child become script instances instead of folders.
+	// The Scripts type is determined by the suffix (server, client)
+	private Instance? InsertFile(string file, Instance target)
 	{
-		// Make sure it doesnt end with a /
+		// Make sure folder paths dont end with a '/'
 		// Ex: "scripts/" turns into "scripts"
 		file = file.TrimEnd('/', '\\');
 
-		string fileExt = file.GetExtension();
+		string fileExtension = file.GetExtension();
 
-		if (Globals.ScriptFileExtensions.Contains(fileExt))
+		if (Globals.ScriptFileExtensions.Contains(fileExtension)) // Script (.luau)
 		{
-			ScriptTypeEnum st = CreatorService.GetScriptTypeFromPath(file);
+			ScriptTypeEnum scriptType = CreatorService.GetScriptTypeFromPath(file);
 			string name = CreatorService.GetScriptNameFromPath(file);
-			CreateScript(st, file, name, target);
+
+			Script script = CreateScript(scriptType, file, name, target);
+			return script;
 		}
-		else if (fileExt == Globals.ModelFileExtension)
+		else if (fileExtension == Globals.ModelFileExtension) // Model (model)
 		{
+			// Ideally this would return the model, but InsertModel is async.
 			_ = Root.LinkedSession.InsertModel(file, target);
+			return null;
 		}
-		else
+		else // Folder
 		{
+			string fileFullPath = Path.Combine(Root.LinkedSession.ProjectFolderPath, file);
 
-			string fullPath = Path.Combine(Root.LinkedSession.ProjectFolderPath, file);
+			string[] childFiles = Directory.GetFiles(fileFullPath);
+			string[] childDirectories = Directory.GetDirectories(fileFullPath);
 
-			string[] childFiles = Directory.GetFiles(fullPath);
-
-			string initChild = null;
-			foreach (string fullChildPath in childFiles)
+			// Loops through files inside folder to find init.luau if it exists
+			string? initFile = null;
+			foreach (string childFullPath in childFiles)
 			{
-				string childFullName = Path.GetFileName(fullChildPath);
+				string childFullName = Path.GetFileName(childFullPath);
 				string childPath = Path.Combine(file, childFullName);
-
-				string childName = Path.GetFileNameWithoutExtension(childFullName);
-
 				if (childFullName == "init.luau")
 				{
-					initChild = childPath;
+					initFile = childPath;
 					break;
 				}
 			}
 
-			Instance? obj = null;
+			Instance instance;
 
-			string folderName = Path.GetFileName(file);
-			if (initChild != null)
+			string folderName = Path.GetFileNameWithoutExtension(file);
+
+			if (initFile != null)
 			{
-				// Have to add .luau extention so function doesnt error.
-				ScriptTypeEnum st = CreatorService.GetScriptTypeFromPath(file + ".luau");
+				// Get script type from folder suffix so it correctly
+				// turns into whatever script wanted.
+				// foo.server -> server script with name foo 
+				// add .luau extention so function doesnt error.
+				ScriptTypeEnum scriptType = CreatorService.GetScriptTypeFromPath(file + ".luau");
 
-				folderName = Path.GetFileNameWithoutExtension(file);
-
-				obj = CreateScript(st, initChild, folderName, target);
+				instance = CreateScript(scriptType, initFile, folderName, target);
 			}
 			else
 			{
-				Folder f = Root.New<Folder>();
-				f.Name = folderName;
-				f.Parent = target;
+				Folder folder = Root.New<Folder>();
+				folder.Name = folderName;
+				folder.Parent = target;
 
-				obj = (Instance)f;
+				instance = folder;
 			}
 
-			if (isRoot == true)
-			{
-				Root.CreatorContext.Selections.Select(obj);
-			}
-
-			string[] childDirectories = Directory.GetDirectories(fullPath);
-
+			// Recursivly call InsertFile on any directories (folders) inside the current folder.
 			foreach (string fullChildPath in childDirectories)
 			{
 				string childFullName = Path.GetFileName(fullChildPath);
-				string childPath = Path.Combine(file, childFullName).Replace('\\', '/'); ;
+				string childPath = Path.Combine(file, childFullName).SanitizePath();
 
-				InsertDirectory(childPath, obj, false);
+				InsertFile(childPath, instance);
 			}
 
+			// Recursivly call InsertFile on any files inside the current folder,
+			// while skipping any invalid files
 			foreach (string fullChildPath in childFiles)
 			{
+				// We shouldn't add any metadata files.
 				string extension = Path.GetExtension(fullChildPath);
 				if (extension == ".meta")
 				{
 					continue;
 				}
+
 				string childFullName = Path.GetFileName(fullChildPath);
 
+				// We can skip over any init scripts
 				if (childFullName == "init.luau")
 				{
 					continue;
 				}
 
-				string childPath = Path.Combine(file, childFullName).Replace('\\', '/'); ;
+				string childPath = Path.Combine(file, childFullName).SanitizePath();
 
-				InsertDirectory(childPath, obj, false);
+				_ = InsertFile(childPath, instance);
 			}
+
+			return instance;
 		}
 	}
 
@@ -276,7 +286,11 @@ public partial class ExplorerTree : Tree
 
 			foreach (string file in fileDrag.Files)
 			{
-				InsertDirectory(file, target, true);
+				Instance? instance = InsertFile(file, target);
+				if (instance != null)
+				{
+					Root.CreatorContext.Selections.Select(instance);
+				}
 			}
 		}
 		else
