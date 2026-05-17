@@ -148,7 +148,7 @@ public partial class ExplorerTree : Tree
 		return script;
 	}
 
-	// Recursivly Inserts files using the standard Rojo/Luau directory system.
+	// Recursivly Inserts files using the standard Luau directory system.
 	// Folders with an init.luau child become script instances instead of folders.
 	// The Scripts type is determined by the suffix (server, client)
 	private Instance? InsertFile(string file, Instance target)
@@ -159,7 +159,7 @@ public partial class ExplorerTree : Tree
 
 		string fileExtension = file.GetExtension();
 
-		if (Globals.ScriptFileExtensions.Contains(fileExtension)) // Script (.luau)
+		if (Globals.ScriptFileExtensions.Contains(fileExtension))
 		{
 			ScriptTypeEnum scriptType = CreatorService.GetScriptTypeFromPath(file);
 			string name = CreatorService.GetScriptNameFromPath(file);
@@ -167,9 +167,8 @@ public partial class ExplorerTree : Tree
 			Script script = CreateScript(scriptType, file, name, target);
 			return script;
 		}
-		else if (fileExtension == Globals.ModelFileExtension) // Model (model)
+		else if (fileExtension == Globals.ModelFileExtension)
 		{
-			// Ideally this would return the model, but InsertModel is async.
 			_ = Root.LinkedSession.InsertModel(file, target);
 			return null;
 		}
@@ -199,9 +198,7 @@ public partial class ExplorerTree : Tree
 
 			if (initFile != null)
 			{
-				// Get script type from folder suffix so it correctly
-				// turns into whatever script wanted.
-				// foo.server -> server script with name foo 
+				// Get script type from folder suffix to determine the script type.
 				// add .luau extention so function doesnt error.
 				ScriptTypeEnum scriptType = CreatorService.GetScriptTypeFromPath(file + ".luau");
 
