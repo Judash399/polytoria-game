@@ -10,6 +10,7 @@ using Polytoria.Creator.Spatial;
 using Polytoria.Datamodel.Interfaces;
 #endif
 using Polytoria.Utils;
+using Polytoria.Utils.DTOs;
 using System;
 using System.Collections.Generic;
 
@@ -64,11 +65,11 @@ public partial class Dynamic : Instance
 	{
 		get
 		{
-			return GetGlobalPosition().Flip();
+			return GetGlobalPosition();
 		}
 		set
 		{
-			SetGlobalPosition(value.Flip());
+			SetGlobalPosition(value);
 			if (AutoUpdateNetTransform)
 			{
 				UpdateNetTransformReliable();
@@ -85,11 +86,15 @@ public partial class Dynamic : Instance
 			Basis globalBasis = GetGlobalTransform().Basis;
 			Quaternion q = globalBasis.GetRotationQuaternion();
 
-			return MathUtils.Vector3RadToDeg(q.GetEuler()).FlipEuler();
+			return MathUtils.Vector3RadToDeg(q.GetEuler());
 		}
 		set
 		{
-			GDNode3D.GlobalRotationDegrees = value.FlipEuler().SanitizeNaN();
+			Vector3 sanitizedValue = value.SanitizeNaN();
+			GDNode3D.GlobalRotationDegrees = sanitizedValue;
+			ForceUpdateTransform();
+			_oldGlobalTransformApplied = GetGlobalTransform();
+
 			if (AutoUpdateNetTransform)
 			{
 				UpdateNetTransformReliable();
@@ -98,7 +103,7 @@ public partial class Dynamic : Instance
 		}
 	}
 
-	[Editable, ScriptProperty, NoSync, CloneIgnore, SaveIgnore]
+	[Editable, ScriptProperty, CloneIgnore, SaveIgnore]
 	public Vector3 Size
 	{
 		get => GetGlobalTransform().Basis.Scale;
@@ -113,10 +118,6 @@ public partial class Dynamic : Instance
 			var oldN = NodeSize;
 			NodeSize = scale;
 			PropagateParentSizeChanged(oldN);
-			if (AutoUpdateNetTransform)
-			{
-				UpdateNetTransformReliable();
-			}
 			OnPropertyChanged();
 		}
 	}
@@ -126,11 +127,11 @@ public partial class Dynamic : Instance
 	{
 		get
 		{
-			return GetLocalPosition().Flip();
+			return GetLocalPosition();
 		}
 		set
 		{
-			SetLocalPosition(value.Flip());
+			SetLocalPosition(value);
 			if (AutoUpdateNetTransform)
 			{
 				UpdateNetTransformReliable();
@@ -144,11 +145,11 @@ public partial class Dynamic : Instance
 	{
 		get
 		{
-			return GDNode3D.RotationDegrees.FlipEuler();
+			return GDNode3D.RotationDegrees;
 		}
 		set
 		{
-			GDNode3D.RotationDegrees = value.FlipEuler().SanitizeNaN();
+			GDNode3D.RotationDegrees = value.SanitizeNaN();
 			if (AutoUpdateNetTransform)
 			{
 				UpdateNetTransformReliable();
@@ -157,7 +158,7 @@ public partial class Dynamic : Instance
 		}
 	}
 
-	[Editable, ScriptProperty, CloneIgnore, NoSync]
+	[Editable, ScriptProperty, CloneIgnore]
 	public Vector3 LocalSize
 	{
 		get
@@ -169,12 +170,6 @@ public partial class Dynamic : Instance
 			var oldN = NodeSize;
 			ApplyLocalSize(value);
 			PropagateParentSizeChanged(oldN);
-
-			if (AutoUpdateNetTransform)
-			{
-				UpdateNetTransformReliable();
-			}
-
 			OnPropertyChanged();
 		}
 	}
@@ -182,11 +177,15 @@ public partial class Dynamic : Instance
 	[ScriptProperty, CloneIgnore, NoSync]
 	public Quaternion Quaternion
 	{
-		get => GetGlobalTransform().Basis.GetRotationQuaternion().Flip();
+		get => GetGlobalTransform().Basis.GetRotationQuaternion();
 		set
 		{
-			Quaternion q = value.Flip();
+			Quaternion q = value;
 			GDNode3D.GlobalBasis = new(q);
+			if (AutoUpdateNetTransform)
+			{
+				UpdateNetTransformReliable();
+			}
 			OnPropertyChanged();
 		}
 	}
@@ -194,11 +193,15 @@ public partial class Dynamic : Instance
 	[ScriptProperty, CloneIgnore, NoSync]
 	public Quaternion LocalQuaternion
 	{
-		get => GetLocalTransform().Basis.GetRotationQuaternion().Flip();
+		get => GetLocalTransform().Basis.GetRotationQuaternion();
 		set
 		{
-			Quaternion q = value.Flip();
+			Quaternion q = value;
 			GDNode3D.Basis = new(q);
+			if (AutoUpdateNetTransform)
+			{
+				UpdateNetTransformReliable();
+			}
 			OnPropertyChanged();
 		}
 	}
@@ -234,9 +237,10 @@ public partial class Dynamic : Instance
 		}
 	}
 
-	[ScriptProperty] public Vector3 Forward => GetGlobalTransform().Basis.Z.Normalized().Flip();
-	[ScriptProperty] public Vector3 Right => -GetGlobalTransform().Basis.X.Normalized().Flip();
-	[ScriptProperty] public Vector3 Up => GetGlobalTransform().Basis.Y.Normalized().Flip();
+	// correct for godot would be -Z, but due to issues described in issue #369, we are using +Z except for the camera
+	[ScriptProperty] public Vector3 Forward => GetGlobalTransform().Basis.Z.Normalized();
+	[ScriptProperty] public Vector3 Right => GetGlobalTransform().Basis.X.Normalized();
+	[ScriptProperty] public Vector3 Up => GetGlobalTransform().Basis.Y.Normalized();
 
 	public override Node CreateGDNode()
 	{
@@ -312,7 +316,7 @@ public partial class Dynamic : Instance
 	public bool AutoUpdateNetTransform { get; internal set; } = true;
 
 	/// <summary>
-	/// Set to true if transform will be overrided, essentially ignoring network transform 
+	/// Set to true if transform will be overrided, essentially ignoring network transform
 	/// </summary>
 	public bool OverrideNetworkTransform { get; internal set; } = false;
 
@@ -360,29 +364,25 @@ public partial class Dynamic : Instance
 		}
 		else
 		{
-			// Lerp position and rotation
-			Vector3 newPosition = _currentTransform.Origin.Lerp(_netTransform.Origin, (float)(delta * LerpSpeed));
-			Quaternion currentRotation = _currentTransform.Basis.GetRotationQuaternion().Normalized();
-			Quaternion targetRotation = _netTransform.Basis.GetRotationQuaternion().Normalized();
-			Quaternion newRotation = currentRotation.Slerp(targetRotation, (float)(delta * LerpSpeed));
-
+			Vector3 newPosition = _currentTransform.Origin.Lerp(_netTransform.Origin, MathUtils.ExpDecay((float)delta, LerpSpeed));
 			Vector3 newScale = _netTransform.Basis.Scale;
+			Quaternion targetRotation = _netTransform.Basis.Orthonormalized().GetRotationQuaternion();
+			Quaternion currentRotation = (this is Part)
+				? GDNode3D.Transform.Basis.Orthonormalized().GetRotationQuaternion()
+				: _currentTransform.Basis.Orthonormalized().GetRotationQuaternion();
 
-			_currentTransform = new Transform3D(new Basis(newRotation).Scaled(newScale), newPosition);
+			Quaternion smoothRot = currentRotation.Slerp(targetRotation, MathUtils.ExpDecay((float)delta, LerpSpeed));
 
-			// Check if close enough to snap to final position
-			if (positionDistance < 0.01f && currentRotation.AngleTo(targetRotation) < 0.1f)
+			_currentTransform = new Transform3D(new Basis(smoothRot).Scaled(newScale), newPosition);
+			if (positionDistance < 0.01f && currentRotation.AngleTo(targetRotation) < 0.01f)
 			{
 				_isDirty = false;
 				_currentTransform = _netTransform;
 			}
 
-			// TODO: Could have some rework here?
-			// If using SetLocalTransformRaw directly, the part size would appear bigger than usual.
 			if (this is Part)
 			{
-				Transform3D setto = new(new Basis(newRotation), _currentTransform.Origin);
-
+				Transform3D setto = new(new Basis(smoothRot), newPosition);
 				// Only update when changed
 				if (!_oldPartTransformApplied.IsEqualApprox(setto))
 				{
@@ -423,11 +423,16 @@ public partial class Dynamic : Instance
 			throw new InvalidOperationException("LookAt Target is invalid");
 		}
 
-		GDNode3D.LookAt(pos.Flip(), up);
+		Vector3 lookTarget = pos;
 
-		// switch coordinates system 
-		GDNode3D.RotateY(Mathf.Pi);
-		GDNode3D.RotationDegrees *= new Vector3(-1, 1, 1);
+		// Godot's LookAt points at -Z, Polytoria uses +Z as forward
+		if (this is not Camera)
+		{
+			Vector3 origin = GDNode3D.GlobalPosition;
+			lookTarget = origin - (pos - origin);
+		}
+
+		GDNode3D.LookAt(lookTarget, up);
 
 		UpdateNetTransformReliable();
 	}
@@ -582,20 +587,24 @@ public partial class Dynamic : Instance
 	/// <param name="fromPeer"></param>
 	/// <param name="newTransform"></param>
 	/// <returns></returns>
-	internal virtual Transform3D TransformNetworkPass(int fromPeer, Transform3D newTransform)
+	internal virtual TransformPayloadDto TransformNetworkPass(int fromPeer, TransformPayloadDto newTransform)
 	{
 		return newTransform;
 	}
 
-	internal virtual bool TransformNetworkCheck(Transform3D newTransform)
+	internal virtual bool TransformNetworkCheck(TransformPayloadDto newTransform)
 	{
 		return true;
 	}
 
-	internal void UpdateTransformFromNet(Transform3D transform, bool isReliable, bool lerpTransform)
+	internal void UpdateTransformFromNet(TransformPayloadDto transform, bool isReliable, bool lerpTransform)
 	{
 		if (OverrideNetworkTransform) return;
-		_netTransform = transform;
+		Vector3 scale = GetLocalTransform().Basis.Scale;
+		_netTransform = new Transform3D(
+			new Basis(transform.Rotation).ScaledLocal(scale),
+			transform.Position
+		);
 		_isDirty = true;
 
 		// TODO: SetPhysicsProcess affects Physical.cs's tick, but could also affect other behaviour.
@@ -609,8 +618,8 @@ public partial class Dynamic : Instance
 			_lerpUnreliable = false;
 			SetPhysicsProcessWAuthor(false);
 
-			_currentTransform = transform;
-			SetLocalTransform(transform);
+			_currentTransform = _netTransform;
+			SetLocalTransform(_netTransform);
 		}
 		else if (lerpTransform && !Root.Network.IsServer)
 		{
@@ -687,22 +696,10 @@ public partial class Dynamic : Instance
 	private void SetCreatorBoundActive(bool to)
 	{
 		if (_boundArea3D == null) return;
-		// Ignore model/physical model and camera
-		if (to && this is not IGroup and not Camera)
-		{
-			if (this is Physical p && p.CanCollide)
-			{
-				_boundArea3D.CollisionLayer = (1 << 3);
-			}
-			else
-			{
-				_boundArea3D.CollisionLayer = (1 << 2);
-			}
-		}
-		else
-		{
-			_boundArea3D.CollisionLayer = 0;
-		}
+		_boundArea3D.CollisionLayer =
+			to && this is not IGroup and not Camera and not Physical
+				? 1 << 2
+				: 0u;
 	}
 
 	internal void PropagateUpdateCreatorBounds()
@@ -739,6 +736,8 @@ public partial class Dynamic : Instance
 		OnPropertyChanged(nameof(LocalPosition), false);
 		OnPropertyChanged(nameof(LocalRotation), false);
 		OnPropertyChanged(nameof(LocalSize), false);
+		OnPropertyChanged(nameof(Quaternion), false);
+		OnPropertyChanged(nameof(LocalQuaternion), false);
 
 		TransformChanged?.Invoke();
 		foreach (Instance item in GetChildren())
@@ -750,9 +749,9 @@ public partial class Dynamic : Instance
 		}
 
 		// Destroy entity/rigidbodies under part destroy height
-		if (Root != null && Root.Environment != null && this is Entity or RigidBody)
+		if (Root != null && Root.Environment != null && this is Physical physical)
 		{
-			if (Position.Y <= Root.Environment.PartDestroyHeight)
+			if (Position.Y <= Root.Environment.PartDestroyHeight && !physical.Anchored)
 			{
 				// If not client, ignore PartDestroyHeight rule
 				if (Root.SessionType != World.SessionTypeEnum.Client) return;
@@ -961,7 +960,7 @@ public partial class Dynamic : Instance
 	[ScriptMethod]
 	public Aabb GetBounds()
 	{
-		return CalculateBounds().Flip();
+		return CalculateBounds();
 	}
 
 	internal void SetVisualMaskLayer(int layer, bool to)

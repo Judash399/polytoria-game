@@ -11,6 +11,7 @@ using Polytoria.Client.Debugger;
 using Polytoria.Client.Settings;
 using Polytoria.Client.Settings.Appliers;
 using Polytoria.Client.WebAPI;
+using Polytoria.Shared.Settings;
 #if CREATOR
 using Polytoria.Creator.Utils;
 #endif
@@ -21,6 +22,7 @@ using Polytoria.Shared;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Polytoria.Shared.AssetLoaders;
 
 namespace Polytoria.Client;
 
@@ -198,9 +200,11 @@ public sealed partial class ClientEntry : Node3D
 		// Use init flow in case it can be stopped by Rendering device switcher
 		settings.Init();
 
+		AssetLoader.Singleton.MaxConcurrentRequests = ClientSettingsService.Instance.Get<int>(SharedSettingKeys.Advanced.AssetQueue);
+
 		settings.AddChild(new DisplaySettingsApplier { Name = "DisplaySettingsApplier" }, true, InternalMode.Front);
 		settings.AddChild(new AudioSettingsApplier { Name = "AudioSettingsApplier" }, true, InternalMode.Front);
-		settings.AddChild(new GraphicsSettingsApplier { Name = "GraphicsSettingsApplier" }, true, InternalMode.Front);
+		settings.AddChild(new GraphicsSettingsApplier { Name = GraphicsSettingsApplier.NodeName, Settings = settings }, true, InternalMode.Front);
 
 		DatamodelBridge = new()
 		{
@@ -463,7 +467,7 @@ public sealed partial class ClientEntry : Node3D
 	{
 		if (@event.IsActionPressed("toggle_fullscreen"))
 		{
-			ClientSettingsService.Instance.Set(ClientSettingKeys.Display.Fullscreen, !ClientSettingsService.Instance.Get<bool>(ClientSettingKeys.Display.Fullscreen));
+			ClientSettingsService.Instance.Set(SharedSettingKeys.Display.Fullscreen, !ClientSettingsService.Instance.Get<bool>(SharedSettingKeys.Display.Fullscreen));
 		}
 		base._UnhandledKeyInput(@event);
 	}

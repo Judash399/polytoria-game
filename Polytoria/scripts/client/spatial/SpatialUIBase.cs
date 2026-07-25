@@ -4,14 +4,11 @@
 
 using Godot;
 using Polytoria.Datamodel;
-using Polytoria.Utils;
 
 namespace Polytoria.Client.UI;
 
 public partial class SpatialUIBase : Sprite3D
 {
-	public const float SpatialVisibleRange = 40;
-
 	public override void _Process(double delta)
 	{
 		if (World.Current == null) { Visible = false; return; }
@@ -19,7 +16,7 @@ public partial class SpatialUIBase : Sprite3D
 
 		if (cam != null)
 		{
-			Visible = (cam.Position.Flip() - GlobalPosition).Length() < SpatialVisibleRange;
+			Visible = (cam.Position - GlobalPosition).Length() < World.Current.CoreUI.ChatBubbleRenderDistance;
 		}
 	}
 }

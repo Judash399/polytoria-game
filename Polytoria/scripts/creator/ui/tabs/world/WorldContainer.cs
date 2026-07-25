@@ -3,6 +3,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 using Godot;
+using Polytoria.Client.Settings.Appliers;
+using Polytoria.Creator.Settings;
 using Polytoria.Creator.UI.Gizmos;
 using Polytoria.Datamodel;
 using Polytoria.Shared;
@@ -21,6 +23,7 @@ public sealed partial class WorldContainer : SubViewportContainer
 	public WorldContainerOverlay Overlay = null!;
 	public UIGizmos UIGizmos = null!;
 	internal event Action<InputEvent>? GodotInputEvent;
+	private ViewportAxis _overlayAxis = null!;
 
 	public WorldContainer(World game)
 	{
@@ -43,11 +46,22 @@ public sealed partial class WorldContainer : SubViewportContainer
 		Overlay = Globals.CreateInstanceFromScene<WorldContainerOverlay>(ContainerOverlayPath);
 		Overlay.World = game;
 		Overlay.Container = this;
+		_overlayAxis = Overlay.GetNode<ViewportAxis>("ViewportAxis");
 		_subViewport.AddChild(Overlay);
 	}
 
 	public override void _Ready()
 	{
+		if (CreatorSettingsService.Instance != null)
+		{
+			var applier = CreatorSettingsService.Instance.GetNodeOrNull<GraphicsSettingsApplier>(GraphicsSettingsApplier.NodeName);
+			if (applier != null)
+			{
+				applier.RenderViewport = _subViewport;
+				applier.ApplyViewportSettings();
+			}
+		}
+
 		// Call on next frame to actually grab focus
 		Callable.From(GrabFocus).CallDeferred();
 		base._Ready();
@@ -59,6 +73,10 @@ public sealed partial class WorldContainer : SubViewportContainer
 		{
 			GrabFocus();
 		}
+
+		var handledByAxis = _overlayAxis.HandleInput(@event);
+		if (handledByAxis) return;
+
 		_subViewport.PushInput(@event);
 		GodotInputEvent?.Invoke(@event);
 	}

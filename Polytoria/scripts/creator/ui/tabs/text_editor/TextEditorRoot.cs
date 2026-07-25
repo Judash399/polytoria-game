@@ -5,8 +5,10 @@
 using Godot;
 using Polytoria.Creator.LSP;
 using Polytoria.Creator.LSP.Schemas;
+using Polytoria.Creator.Settings;
 using Polytoria.Datamodel.Creator;
 using Polytoria.Shared;
+using Polytoria.Shared.Settings;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,6 +30,7 @@ public partial class TextEditorRoot : Node
 
 	[Export] private TextEditorFind _finder = null!;
 	[Export] private Label _diagLabel = null!;
+	[Export] private Label _statusBar = null!;
 
 	public static Color ColorDanger { get; private set; } = Color.FromString("D77C79", Colors.White);
 	public static Color ColorOrange { get; private set; } = Color.FromString("E6A472", Colors.White);
@@ -41,6 +44,7 @@ public partial class TextEditorRoot : Node
 	private CodeHighlighter _highlighter = null!;
 	private LuaCompletionService? _completion = null!;
 
+
 	private Godot.Timer _autoCompleteTimer = null!;
 	private CancellationTokenSource? _diagCts;
 
@@ -50,6 +54,8 @@ public partial class TextEditorRoot : Node
 		base._EnterTree();
 	}
 
+	private const int FormatMenuId = 10010;
+
 	public override async void _ExitTree()
 	{
 		if (_completion != null)
@@ -57,6 +63,7 @@ public partial class TextEditorRoot : Node
 			await _completion.CloseScriptAsync(Container.TargetFilePathAbsolute);
 			_completion.PublishDiagnostics -= OnPublishDiagnostics;
 		}
+		CreatorSettingsService.Instance.Changed -= OnCreatorSettingChanged;
 		base._ExitTree();
 	}
 
@@ -66,17 +73,28 @@ public partial class TextEditorRoot : Node
 		_autoCompleteTimer.OneShot = true;
 		_autoCompleteTimer.Timeout += OnCompletionRequest;
 
-		_completion = Container.TargetSession.LuaCompletion;
-		_completion?.PublishDiagnostics += OnPublishDiagnostics;
+		if (Container.CodeCompletion == FileTypeEnum.Lua)
+		{
+			_completion = Container.TargetSession.LuaCompletion;
+			_completion?.PublishDiagnostics += OnPublishDiagnostics;
+
+			CodeEditor.CodeCompletionPrefixes = [".", ":", "\n", ",", " ", "("];
+			CodeEditor.CodeCompletionEnabled = true;
+			CodeEditor.CodeCompletionRequested += OnCompletionRequest;
+		}
 
 		CodeEditor.Text = File.ReadAllText(Container.TargetFilePathAbsolute);
 		CodeEditor.ClearUndoHistory();
 		CodeEditor.TextChanged += OnCodeEditTextChanged;
-		InitSyntaxHighlighter();
+		InitSyntaxHighlighter(Container.CodeCompletion);
 
-		CodeEditor.CodeCompletionPrefixes = [".", ":", "\n", ",", " ", "("];
-		CodeEditor.CodeCompletionEnabled = true;
-		CodeEditor.CodeCompletionRequested += OnCompletionRequest;
+		// testing for now:
+		CodeEditor.GetMenu().AddItem("Format Script", id: FormatMenuId);
+		CodeEditor.GetMenu().IdPressed += OnContextMenuIdPressed;
+
+		CreatorSettingsService.Instance.Changed += OnCreatorSettingChanged;
+		ApplyIndentSettings();
+
 		CodeEditor.GuiInput += OnCodeEditGUIInput;
 
 		CodeEditor.GuttersDrawLineNumbers = true;
@@ -96,6 +114,37 @@ public partial class TextEditorRoot : Node
 		{
 			await _completion.OpenScriptAsync(Container.TargetFilePathAbsolute);
 		}
+
+		UpdateStatusBar();
+	}
+
+	private async void OnContextMenuIdPressed(long id)
+	{
+		switch (id)
+		{
+			case FormatMenuId:
+				{
+					CodeEditor.Text = await LuaFormatService.FormatScriptAsync(Container.TargetFilePathAbsolute, CodeEditor.Text);
+					OnCodeEditTextChanged();
+					break;
+				}
+		}
+	}
+
+	private void OnCreatorSettingChanged(SettingChangedEvent e)
+	{
+		if (e.Key == CreatorSettingKeys.CodeEditor.IndentationMode || e.Key == CreatorSettingKeys.CodeEditor.IndentationSize)
+		{
+			ApplyIndentSettings();
+		}
+	}
+
+	private void ApplyIndentSettings()
+	{
+		IndentationModeEnum indentationMode = CreatorSettingsService.Instance.Get<IndentationModeEnum>(CreatorSettingKeys.CodeEditor.IndentationMode);
+		int indentationSize = CreatorSettingsService.Instance.Get<int>(CreatorSettingKeys.CodeEditor.IndentationSize);
+		CodeEditor.IndentUseSpaces = indentationMode == IndentationModeEnum.Spaces;
+		CodeEditor.IndentSize = indentationSize;
 	}
 
 	private async void OnPublishDiagnostics(string path, List<LspDiagnostic> diagnostics)
@@ -169,49 +218,78 @@ public partial class TextEditorRoot : Node
 		if (@event.IsActionPressed("save"))
 		{
 			CodeEditor.AcceptEvent();
-			Save();
+			await Save();
 			Saved = true;
 			SavedChanged?.Invoke(true);
+
 			CreatorService.Interface.StatusBar?.SetStatus("Text file saved to " + Container.TargetFilePath + " at " + DateTime.Now.ToString("HH:mm:ss"));
 		}
 		else if (@event.IsActionPressed("textedit_find") || @event.IsActionPressed("textedit_replace"))
 		{
+			CodeEditor.AcceptEvent();
 			_finder.Open(CodeEditor.GetSelectedText());
+		}
+		else if (@event.IsActionPressed("textedit_toggle_comment"))
+		{
+			CodeEditor.AcceptEvent();
+			ToggleComment();
 		}
 		else if (@event.IsActionPressed("ui_cancel"))
 		{
+			CodeEditor.AcceptEvent();
 			_finder.Close();
+		}
+		else
+		{
+			UpdateStatusBar();
 		}
 	}
 
-	private void InitSyntaxHighlighter()
+	private void InitSyntaxHighlighter(FileTypeEnum fileType)
 	{
 		_highlighter = new();
 		CodeEditor.SyntaxHighlighter = _highlighter;
 
-		foreach (string item in LuaCompletionService.LuaKeywords)
+		if (fileType == FileTypeEnum.Lua)
 		{
-			_highlighter.AddKeywordColor(item, ColorDanger);
+			_highlighter.FunctionColor = ColorWarn;
+			_highlighter.MemberVariableColor = ColorWhite;
+			_highlighter.NumberColor = ColorSuccess;
+			_highlighter.SymbolColor = ColorWhite;
+
+			foreach (string item in LuaCompletionService.LuaKeywords)
+			{
+				_highlighter.AddKeywordColor(item, ColorDanger);
+			}
+
+			_highlighter.AddColorRegion("\"", "\"", ColorWarn);
+			_highlighter.AddColorRegion("'", "'", ColorWarn);
+			_highlighter.AddColorRegion("`", "`", ColorWarn);
+			_highlighter.AddColorRegion("[[", "]]", ColorWarn);
+			_highlighter.AddColorRegion("--[[", "]]", ColorGrey);
+			_highlighter.AddColorRegion("--", "", ColorGrey);
+
+			CodeEditor.AddStringDelimiter("\"", "\"", true);
+			CodeEditor.AddStringDelimiter("'", "'", true);
+			CodeEditor.AddStringDelimiter("[[", "]]", false);
 		}
-
-		_highlighter.AddColorRegion("\"", "\"", ColorWarn);
-		_highlighter.AddColorRegion("'", "'", ColorWarn);
-		_highlighter.AddColorRegion("`", "`", ColorWarn);
-		_highlighter.AddColorRegion("[[", "]]", ColorWarn);
-		_highlighter.AddColorRegion("--[[", "]]", ColorGrey);
-		_highlighter.AddColorRegion("--", "", ColorGrey);
-		_highlighter.FunctionColor = ColorWarn;
-		_highlighter.MemberVariableColor = ColorWhite;
-		_highlighter.NumberColor = ColorSuccess;
-		_highlighter.SymbolColor = ColorWhite;
-
-		CodeEditor.AddStringDelimiter("\"", "\"", true);
-		CodeEditor.AddStringDelimiter("'", "'", true);
-		CodeEditor.AddStringDelimiter("[[", "]]", false);
+		else
+		{
+			_highlighter.FunctionColor = ColorWhite;
+			_highlighter.MemberVariableColor = ColorWhite;
+			_highlighter.NumberColor = ColorWhite;
+			_highlighter.SymbolColor = ColorWhite;
+		}
 	}
 
-	public void Save()
+	public async Task Save()
 	{
+		bool formatOnSave = CreatorSettingsService.Instance.Get<bool>(CreatorSettingKeys.CodeEditor.FormatOnSave);
+		if (formatOnSave)
+		{
+			CodeEditor.Text = await LuaFormatService.FormatScriptAsync(Container.TargetFilePathAbsolute, CodeEditor.Text);
+		}
+
 		File.WriteAllText(Container.TargetFilePathAbsolute, CodeEditor.Text);
 	}
 
@@ -300,6 +378,13 @@ public partial class TextEditorRoot : Node
 		CodeEditor.UpdateCodeCompletionOptions(false);
 	}
 
+	private void UpdateStatusBar()
+	{
+		int lineIndex = CodeEditor.GetCaretLine() + 1;
+		int column = CodeEditor.GetCaretColumn() + 1;
+		_statusBar.Text = $"{Container.OriginTabName}: ({lineIndex}:{column})";
+	}
+
 	public string GetWordBeforeCaret()
 	{
 		int lineIndex = CodeEditor.GetCaretLine();
@@ -324,6 +409,50 @@ public partial class TextEditorRoot : Node
 			}
 		}
 
-		return lineText.Substring(startPos, column - startPos);
+		return lineText[startPos..column];
+	}
+
+	public IEnumerable<int> GetSelectedLines()
+	{
+		for (int caretIdx = 0; caretIdx < CodeEditor.GetCaretCount(); caretIdx++)
+		{
+			for (int lineIdx = CodeEditor.GetSelectionFromLine(caretIdx); lineIdx <= CodeEditor.GetSelectionToLine(caretIdx); lineIdx++)
+			{
+				yield return lineIdx;
+			}
+		}
+	}
+
+	private bool IsSelectionCommented()
+	{
+		foreach (int lineIdx in GetSelectedLines())
+		{
+			string lineText = CodeEditor.GetLine(lineIdx);
+			if (!lineText.StartsWith("--"))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public void ToggleComment()
+	{
+		if (IsSelectionCommented())
+		{
+			foreach (int lineIdx in GetSelectedLines())
+			{
+				string lineText = CodeEditor.GetLine(lineIdx);
+				CodeEditor.SetLine(lineIdx, lineText[2..]);
+			}
+		}
+		else
+		{
+			foreach (int lineIdx in GetSelectedLines())
+			{
+				string lineText = CodeEditor.GetLine(lineIdx);
+				CodeEditor.SetLine(lineIdx, "--" + lineText);
+			}
+		}
 	}
 }

@@ -5,6 +5,7 @@
 using Godot;
 using Polytoria.Attributes;
 using Polytoria.Creator.Managers;
+using Polytoria.Creator.Settings;
 using Polytoria.Datamodel;
 using Polytoria.Datamodel.Creator;
 using Polytoria.Datamodel.Interfaces;
@@ -27,6 +28,11 @@ public partial class ExplorerItemContextMenu : ContextMenu
 			AddIconItem("plus", "Add Child", 1);
 			AddIconItem("script", "Add Script", 2);
 			AddSeparator();
+			if (Target is Dynamic dyn)
+			{
+				AddIconItem("camera", "Go To", 5);
+				AddSeparator();
+			}
 			if (Target.LinkedModel != null)
 			{
 				if (Target.EditableChildren)
@@ -49,7 +55,7 @@ public partial class ExplorerItemContextMenu : ContextMenu
 		AddIconItem("select-all", "Select Children", 25);
 		AddSeparator();
 		AddIconItem("group", "Group", 31);
-		if (Target is IGroup)
+		if (Target is IGroup or RigidBody)
 		{
 			AddIconItem("ungroup", "Ungroup", 32);
 		}
@@ -89,12 +95,17 @@ public partial class ExplorerItemContextMenu : ContextMenu
 		{
 			case 1: // Add child
 				{
-					InsertMenuPopup menu = CreatorService.Interface.OpenInsertMenu(Target);
+					CreatorService.Interface.OpenInsertMenu(Target);
 					break;
 				}
 			case 2: // Add script
 				{
 					CreatorService.Interface.PromptCreateScript(Target);
+					break;
+				}
+			case 5: // Go To
+				{
+					context.Freelook.MoveToSelected();
 					break;
 				}
 			case 20: // Cut
@@ -148,7 +159,7 @@ public partial class ExplorerItemContextMenu : ContextMenu
 					{
 						if (Target.EditableChildren)
 						{
-							if (!await CreatorService.Interface.PromptConfirmation("Closing this model will discard any unsaved changes.", dismissKey: "Popups.CloseModelWarning")) return;
+							if (!await CreatorService.Interface.PromptConfirmation("Closing this model will discard any unsaved changes.", dismissKey: CreatorSettingKeys.Popups.CloseModelWarning)) return;
 						}
 						Target?.EditableChildren = !Target.EditableChildren;
 					}

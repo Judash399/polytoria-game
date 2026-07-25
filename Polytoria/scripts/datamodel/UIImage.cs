@@ -19,8 +19,26 @@ public partial class UIImage : UIField
 	private string _imageID = "";
 	private ImageTypeEnum _imageType;
 	private TextureFilterEnum _textureFilter;
+	private Vector2 _textureScale = Vector2.One;
+	private Vector2 _textureOffset = Vector2.Zero;
 	private Color _color = new(1, 1, 1, 1);
 	private ImageStretchModeEnum _stretchMode = ImageStretchModeEnum.Stretch;
+	private bool _flipH = false;
+	private bool _flipV = false;
+	private Texture2D? _loadedTexture;
+	private ShaderMaterial? _shaderMaterial;
+
+	private const string UV_SHADER = """
+    shader_type canvas_item;
+    uniform vec2 texture_scale = vec2(1.0, 1.0);
+    uniform vec2 texture_offset = vec2(0.0, 0.0);
+    uniform vec4 modulate_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+
+    void fragment() {
+        vec2 uv = (UV * texture_scale) + texture_offset;
+        COLOR = texture(TEXTURE, uv) * modulate_color;
+    }
+    """;
 
 	[Editable, ScriptProperty, Export]
 	public ImageAsset? Image
@@ -79,13 +97,37 @@ public partial class UIImage : UIField
 	}
 
 	[Editable, ScriptProperty]
+	public Vector2 TextureScale
+	{
+		get => _textureScale;
+		set
+		{
+			_textureScale = value;
+			ApplyTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public Vector2 TextureOffset
+	{
+		get => _textureOffset;
+		set
+		{
+			_textureOffset = value;
+			ApplyTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
 	public Color Color
 	{
 		get => _color;
 		set
 		{
 			_color = value;
-			NodeControl.SelfModulate = value;
+			ApplyTexture();
 			OnPropertyChanged();
 		}
 	}
@@ -118,9 +160,35 @@ public partial class UIImage : UIField
 			GDTextureRect.TextureFilter = value switch
 			{
 				TextureFilterEnum.Nearest => CanvasItem.TextureFilterEnum.Nearest,
+				TextureFilterEnum.NearestNoMipmaps => CanvasItem.TextureFilterEnum.Nearest,
 				TextureFilterEnum.Linear => CanvasItem.TextureFilterEnum.Linear,
+				TextureFilterEnum.LinearNoMipmaps => CanvasItem.TextureFilterEnum.Linear,
 				_ => throw new IndexOutOfRangeException("Texture filter mode out of range"),
 			};
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public bool FlipHorizontal
+	{
+		get => _flipH;
+		set
+		{
+			_flipH = value;
+			GDTextureRect.FlipH = value;
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public bool FlipVertical
+	{
+		get => _flipV;
+		set
+		{
+			_flipV = value;
+			GDTextureRect.FlipV = value;
 			OnPropertyChanged();
 		}
 	}
@@ -160,17 +228,49 @@ public partial class UIImage : UIField
 		StretchMode = ImageStretchModeEnum.Stretch;
 	}
 
+	private void ApplyTexture()
+	{
+		if (_loadedTexture == null) return;
+
+		if (_textureScale == Vector2.One && _textureOffset == Vector2.Zero)
+		{
+			GDTextureRect.Material = null;
+			GDTextureRect.Texture = _loadedTexture;
+			GDTextureRect.SelfModulate = _color;
+			return;
+		}
+
+		if (_shaderMaterial == null)
+		{
+			Shader shader = new();
+			shader.Code = UV_SHADER;
+			_shaderMaterial = new ShaderMaterial();
+			_shaderMaterial.Shader = shader;
+		}
+
+		_shaderMaterial.SetShaderParameter("texture_scale", _textureScale);
+		_shaderMaterial.SetShaderParameter("texture_offset", _textureOffset);
+		_shaderMaterial.SetShaderParameter("modulate_color", _color);
+		GDTextureRect.SelfModulate = new Color(1, 1, 1, 1);
+		GDTextureRect.Texture = _loadedTexture;
+		GDTextureRect.TextureRepeat = CanvasItem.TextureRepeatEnum.Enabled;
+		GDTextureRect.Material = _shaderMaterial;
+	}
+
 	private void SetToDefaultImage()
 	{
-		GDTextureRect.Texture = GD.Load<Texture2D>("res://assets/textures/client/ui/DefaultImage.png");
+		_loadedTexture = GD.Load<Texture2D>("res://assets/textures/client/ui/DefaultImage.png");
+		ApplyTexture();
 	}
 
 	private void OnResourceLoaded(Resource tex)
 	{
-		GDTextureRect.Texture = (Texture2D)tex;
+		_loadedTexture = (Texture2D)tex;
+		ApplyTexture();
 		Loading = false;
 	}
 
+	[ScriptEnum]
 	public enum ImageStretchModeEnum
 	{
 		Stretch,

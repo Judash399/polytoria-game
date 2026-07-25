@@ -1,5 +1,5 @@
 {
-  "Version": "2.0.0-beta87\u002Bdev",
+  "Version": "2.0.12\u002Bdev",
   "FileType": 0,
   "Objects": [
     {
@@ -41,14 +41,14 @@
                 "CanLock": true,
                 "SensitivityMultiplier": 1,
                 "LocalPosition": [
-                  -0,
+                  0,
                   0,
                   0
                 ],
                 "LocalRotation": [
                   -0,
-                  -0,
-                  -0
+                  0,
+                  0
                 ],
                 "LocalSize": [
                   1,
@@ -69,26 +69,28 @@
                 "Material": 5,
                 "Color": "aeff9aff",
                 "Velocity": [
-                  0,
+                  -0,
                   0,
                   0
                 ],
                 "AngularVelocity": [
                   0,
-                  0,
-                  0
+                  -0,
+                  -0
                 ],
                 "Anchored": true,
                 "CanCollide": true,
+                "CollisionLayers": 1,
+                "CollisionMask": 1,
                 "LocalPosition": [
-                  7.9231944E-07,
+                  -7.9231944E-07,
                   0,
                   0
                 ],
                 "LocalRotation": [
                   -0,
-                  -0,
-                  -0
+                  0,
+                  0
                 ],
                 "LocalSize": [
                   500,
@@ -111,26 +113,28 @@
                 "Color": "ffffffff",
                 "IsSpawn": true,
                 "Velocity": [
-                  0,
+                  -0,
                   0,
                   0
                 ],
                 "AngularVelocity": [
                   0,
-                  0,
-                  0
+                  -0,
+                  -0
                 ],
                 "Anchored": true,
                 "CanCollide": true,
+                "CollisionLayers": 1,
+                "CollisionMask": 1,
                 "LocalPosition": [
-                  -0,
+                  0,
                   3,
                   0
                 ],
                 "LocalRotation": [
                   -0,
-                  -0,
-                  -0
+                  0,
+                  0
                 ],
                 "LocalSize": [
                   5,
@@ -144,19 +148,66 @@
               "IsLinkedChild": false
             },
             {
+              "Name": "ParentChildRoot",
+              "ClassName": "Folder",
+              "ID": "c0e57857-fd07-4cc4-89da-00f50cd00a26",
+              "Properties": {
+                "Tags": []
+              },
+              "Children": [
+                {
+                  "Name": "One",
+                  "ClassName": "Folder",
+                  "ID": "4ad8e825-40c8-4521-a59c-b3f795739d3e",
+                  "Properties": {
+                    "Tags": []
+                  },
+                  "Children": [
+                    {
+                      "Name": "Two",
+                      "ClassName": "Folder",
+                      "ID": "2dd1465a-d9f0-48d9-b47b-e72d327d738b",
+                      "Properties": {
+                        "Tags": []
+                      },
+                      "Children": [
+                        {
+                          "Name": "Three",
+                          "ClassName": "Folder",
+                          "ID": "94b3d6e5-dd9f-4e43-b4ab-fea9cabb8963",
+                          "Properties": {
+                            "Tags": []
+                          },
+                          "Children": [],
+                          "LinkedModel": null,
+                          "IsLinkedChild": false
+                        }
+                      ],
+                      "LinkedModel": null,
+                      "IsLinkedChild": false
+                    }
+                  ],
+                  "LinkedModel": null,
+                  "IsLinkedChild": false
+                }
+              ],
+              "LinkedModel": null,
+              "IsLinkedChild": false
+            },
+            {
               "Name": "h",
               "ClassName": "Model",
               "ID": "fb82c469-7ec9-4fe5-a522-175c5c6757f0",
               "Properties": {
                 "LocalPosition": [
-                  -0.5,
+                  0.5,
                   5.8333335,
                   -8
                 ],
                 "LocalRotation": [
                   -0,
-                  -0,
-                  -0
+                  0,
+                  0
                 ],
                 "LocalSize": [
                   1,
@@ -173,26 +224,28 @@
                   "Properties": {
                     "Color": "ffffffff",
                     "Velocity": [
-                      0,
+                      -0,
                       0,
                       0
                     ],
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "Anchored": true,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 1,
                     "LocalPosition": [
-                      1.5,
+                      -1.5,
                       0.6666665,
                       0
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       1,
@@ -212,26 +265,28 @@
                   "Properties": {
                     "Color": "ffffffff",
                     "Velocity": [
-                      0,
+                      -0,
                       0,
                       0
                     ],
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "Anchored": true,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 1,
                     "LocalPosition": [
-                      -1.5,
+                      1.5,
                       -1.3333335,
                       0
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       1,
@@ -251,26 +306,28 @@
                   "Properties": {
                     "Color": "ffffffff",
                     "Velocity": [
-                      0,
+                      -0,
                       0,
                       0
                     ],
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "Anchored": true,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 1,
                     "LocalPosition": [
-                      -0,
+                      0,
                       0.6666665,
                       0
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       2,
@@ -320,14 +377,14 @@
               "ID": "0cef0c3f-51b2-4176-9608-d36140190b16",
               "Properties": {
                 "LocalPosition": [
-                  11,
+                  -11,
                   3,
                   -8
                 ],
                 "LocalRotation": [
                   -0,
-                  -0,
-                  -0
+                  0,
+                  0
                 ],
                 "LocalSize": [
                   1,
@@ -344,26 +401,28 @@
                   "Properties": {
                     "Color": "ffffffff",
                     "Velocity": [
-                      -0,
+                      0,
                       0,
                       0
                     ],
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "Anchored": true,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 1,
                     "LocalPosition": [
-                      -0,
+                      0,
                       0,
                       0
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       1,
@@ -383,26 +442,28 @@
                   "Properties": {
                     "Color": "ffffffff",
                     "Velocity": [
-                      -0,
+                      0,
                       0,
                       0
                     ],
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "Anchored": true,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 1,
                     "LocalPosition": [
-                      -0,
+                      0,
                       0,
                       4
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       1,
@@ -422,26 +483,28 @@
                   "Properties": {
                     "Color": "ffffffff",
                     "Velocity": [
-                      -0,
+                      0,
                       0,
                       0
                     ],
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "Anchored": true,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 1,
                     "LocalPosition": [
-                      -0,
+                      0,
                       0,
                       7
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       1,
@@ -460,7 +523,7 @@
                   "ID": "297651b0-836e-4ebd-87c9-99363fcc1e6c",
                   "Properties": {
                     "Velocity": [
-                      -0,
+                      0,
                       0,
                       0
                     ],
@@ -485,20 +548,22 @@
                     "Character": "c4f96fd9-aba4-4141-80e8-f4bb0086646d",
                     "Anchored": false,
                     "CanCollide": true,
+                    "CollisionLayers": 1,
+                    "CollisionMask": 3,
                     "AngularVelocity": [
                       0,
-                      0,
-                      0
+                      -0,
+                      -0
                     ],
                     "LocalPosition": [
-                      -0,
+                      0,
                       3,
                       2
                     ],
                     "LocalRotation": [
                       -0,
-                      -0,
-                      -0
+                      0,
+                      0
                     ],
                     "LocalSize": [
                       1,
@@ -521,14 +586,14 @@
                         "RightLegColor": "ffffffff",
                         "Animator": "6ff8f25d-eec7-4398-a265-0a80f845247c",
                         "LocalPosition": [
-                          -0,
+                          0,
                           0,
                           0
                         ],
                         "LocalRotation": [
                           0,
-                          0,
-                          0
+                          -0,
+                          -0
                         ],
                         "LocalSize": [
                           1,
@@ -566,15 +631,16 @@
                         "PlayInWorld": true,
                         "Paused": false,
                         "MaxDistance": 60,
+                        "AttenuationMode": 0,
                         "LocalPosition": [
-                          -0,
+                          0,
                           0,
                           0
                         ],
                         "LocalRotation": [
                           0,
-                          0,
-                          0
+                          -0,
+                          -0
                         ],
                         "LocalSize": [
                           1,
@@ -619,19 +685,21 @@
               "ClassName": "SunLight",
               "ID": "5f3df07f-79a2-47fd-9f05-80e088ec16c1",
               "Properties": {
+                "Enabled": true,
                 "Color": "fff4d6ff",
                 "Brightness": 1,
+                "LightSize": 0,
                 "Specular": 0.5,
                 "Shadows": true,
                 "LocalPosition": [
-                  -0,
+                  0,
                   15,
                   0
                 ],
                 "LocalRotation": [
                   49.999992,
-                  -30,
-                  -0
+                  30,
+                  0
                 ],
                 "LocalSize": [
                   1,
@@ -876,6 +944,20 @@
                   "IsLinkedChild": false
                 },
                 {
+                  "Name": "ParentsAndChildren",
+                  "ClassName": "ServerScript",
+                  "ID": "2a647b4c-9d7c-4ee8-8ba0-c90c231e36f8",
+                  "Properties": {
+                    "IsEnabled": true,
+                    "LinkedScript": "c102ab47-bbfd-4273-a6a8-520ed7c2f5b7",
+                    "Compatibility": false,
+                    "Tags": []
+                  },
+                  "Children": [],
+                  "LinkedModel": null,
+                  "IsLinkedChild": false
+                },
+                {
                   "Name": "Shared",
                   "ClassName": "ServerScript",
                   "ID": "82df70ed-5e52-417f-983c-affbba301887",
@@ -930,6 +1012,20 @@
                   "Children": [],
                   "LinkedModel": null,
                   "IsLinkedChild": false
+                },
+                {
+                  "Name": "SemiStaticNamecall",
+                  "ClassName": "ServerScript",
+                  "ID": "258ae160-116d-4f5f-bea5-980dd9bb944d",
+                  "Properties": {
+                    "IsEnabled": true,
+                    "LinkedScript": "f2e9ab36-6861-412d-a497-e316423a1c65",
+                    "Compatibility": false,
+                    "Tags": []
+                  },
+                  "Children": [],
+                  "LinkedModel": null,
+                  "IsLinkedChild": false
                 }
               ],
               "LinkedModel": null,
@@ -972,6 +1068,7 @@
             "JumpPower": 36,
             "RespawnTime": 5,
             "ChatColor": "ffffffff",
+            "ChatColorsEnabled": true,
             "CanMove": true,
             "StaminaBurn": 1.2,
             "UseStamina": true,
@@ -1031,6 +1128,7 @@
           "ClassName": "CoreUIService",
           "ID": "1e50f39e-881b-4444-b137-2b90385018a5",
           "Properties": {
+            "CtrlLockCursor": 1,
             "UseUserCard": true,
             "UseChat": true,
             "UseHealthBar": true,

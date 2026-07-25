@@ -2,8 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+using Polytoria.Attributes;
+
 namespace Polytoria.Enums;
 
+[ScriptEnum]
 public enum KeyCodeEnum
 {
 	None = 0,
@@ -639,4 +642,12 @@ public enum KeyCodeEnum
 	/// <para>Game controller right trigger axis.</para>
 	/// </summary>
 	GamepadAxisTriggerRight = 3005,
+	/// <summary>
+	/// <para>Mouse movement x-axis.</para>
+	/// </summary>
+	MouseAxisX = 3006,
+	/// <summary>
+	/// <para>Mouse movement y-axis.</para>
+	/// </summary>
+	MouseAxisY = 3007,
 }

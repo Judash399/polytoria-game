@@ -18,6 +18,7 @@ public partial class CharacterModel : Dynamic
 	private readonly Dictionary<CharacterModelBlendEnum, float> _blendValues = [];
 	private Animator? _animator = null!;
 
+	[ScriptEnum]
 	public enum CharacterModelStateEnum
 	{
 		Idle,
@@ -102,36 +103,43 @@ public partial class CharacterModel : Dynamic
 		}
 	}
 
+	[ScriptMethod]
 	public void PlayIdle()
 	{
 		SetState(CharacterModelStateEnum.Idle);
 	}
 
+	[ScriptMethod]
 	public void PlayWalk()
 	{
 		SetState(CharacterModelStateEnum.Walking);
 	}
 
+	[ScriptMethod]
 	public void PlayRun()
 	{
 		SetState(CharacterModelStateEnum.Running);
 	}
 
+	[ScriptMethod]
 	public void PlayJump()
 	{
 		SetState(CharacterModelStateEnum.Jumping);
 	}
 
+	[ScriptMethod]
 	public void PlayClimb()
 	{
 		SetState(CharacterModelStateEnum.Climbing);
 	}
 
+	[ScriptMethod]
 	public void SetAnimSpeed(float speed)
 	{
 		CurrentSpeed = speed;
 	}
 
+	[ScriptMethod]
 	public void SetState(CharacterModelStateEnum newState)
 	{
 		if (newState != CurrentState)
@@ -172,6 +180,7 @@ public partial class CharacterModel : Dynamic
 
 	public virtual void ApplyCameraModifier(Camera camera) { }
 
+	[ScriptEnum]
 	public enum CharacterAttachmentEnum
 	{
 		Head,

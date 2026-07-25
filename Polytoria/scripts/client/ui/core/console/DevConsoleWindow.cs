@@ -76,7 +76,7 @@ public partial class DevConsoleWindow : Control
 				}
 			}
 		}
-		else if (@event is InputEventMouseMotion mouseMotion)
+		else if (@event is InputEventMouseMotion)
 		{
 			if (_isResizing)
 			{
@@ -104,9 +104,9 @@ public partial class DevConsoleWindow : Control
 		base._ExitTree();
 	}
 
-	public void Popup()
+	public void Toggle()
 	{
-		Visible = true;
+		Visible = !Visible;
 	}
 
 	private void OnCloseRequested()

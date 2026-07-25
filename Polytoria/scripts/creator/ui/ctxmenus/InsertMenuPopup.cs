@@ -11,6 +11,7 @@ using Polytoria.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Script = Polytoria.Datamodel.Script;
 
 namespace Polytoria.Creator.UI;
 
@@ -39,34 +40,21 @@ public partial class InsertMenuPopup : PopupPanel
 			"Truss",
 			"Mesh",
 			"Seat",
+			"Model",
+			"Folder",
+			"Text3D",
+			"Image3D",
+			"Decal",
+			"Camera",
 		},
-		[new() { Title = "Lights" }] = new()
+		[new() { Title = "Lighting" }] = new()
 		{
 			"PointLight",
 			"SpotLight"
 		},
-		[new() { Title = "Elements" }] = new()
-		{
-			"Text3D",
-			"Image3D",
-			"Decal",
-			"Sound",
-			"Particles",
-			"NPC",
-			"GUI3D",
-			"Folder",
-			"Model",
-			"Tool",
-			"Marker3D",
-			"Camera",
-		},
-		[new() { Title = "Character", RecommendOn = [typeof(CharacterModel)] }] = new()
-		{
-			"Accessory",
-			"Clothing",
-		},
 		[new() { Title = "Scripting", RecommendOn = [typeof(ScriptService), typeof(Folder)] }] = new()
 		{
+			"InteractionPrompt",
 			"NetworkEvent",
 			"BindableEvent",
 		},
@@ -75,23 +63,29 @@ public partial class InsertMenuPopup : PopupPanel
 			"BoolValue",
 			"IntValue",
 			"NumberValue",
+			"RangeValue",
 			"StringValue",
+			"VariantValue",
 			"Vector2Value",
 			"Vector3Value",
+			"QuaternionValue",
 			"ColorValue",
 			"InstanceValue"
 		},
-		[new() { Title = "Skies", RecommendOn = [typeof(Lighting)] }] = new()
+		[new() { Title = "Effects" }] = new()
 		{
-			"ImageSky",
-			"GradientSky",
-			"ProceduralSky"
+			"Particles",
 		},
-		[new() { Title = "Physics" }] = new()
+		[new() { Title = "Audio" }] = new()
 		{
-			"RigidBody",
-			"BodyPosition",
-			"Grabbable",
+			"Sound",
+		},
+		[new() { Title = "Characters", RecommendOn = [typeof(CharacterModel)] }] = new()
+		{
+			"Accessory",
+			"Clothing",
+			"NPC",
+			"Tool",
 		},
 		/*
 		["Vehicles"] = new()
@@ -105,9 +99,10 @@ public partial class InsertMenuPopup : PopupPanel
 		{
 			"ColorAdjustModifier",
 		},
-		[new() { Title = "UIs", RecommendOn = [typeof(UIField), typeof(GUI), typeof(GUI3D), typeof(PlayerGUI)] }] = new()
+		[new() { Title = "UI", RecommendOn = [typeof(UIField), typeof(GUI), typeof(GUI3D), typeof(PlayerGUI)] }] = new()
 		{
 			"GUI",
+			"GUI3D",
 			"UIView",
 			"UILabel",
 			"UIButton",
@@ -120,14 +115,37 @@ public partial class InsertMenuPopup : PopupPanel
 			"UIGridLayout",
 			"UIScrollView",
 			"UIViewport",
+			"UICorner",
+			"UIStroke",
+			"UIShadow",
+			"UIAspectRatioRestraint",
+		},
+		[new() { Title = "Teams", RecommendOn = [typeof(Teams)] }] = new()
+		{
+			"Team",
 		},
 		[new() { Title = "Stats", RecommendOn = [typeof(Stats)] }] = new()
 		{
 			"Stat",
 		},
-		[new() { Title = "Teams", RecommendOn = [typeof(Teams)] }] = new()
+		[new() { Title = "Skies", RecommendOn = [typeof(Lighting)] }] = new()
 		{
-			"Team",
+			"ImageSky",
+			"GradientSky",
+			"ProceduralSky"
+		},
+		[new() { Title = "Physics" }] = new()
+		{
+			"RigidBody",
+			"BodyPosition",
+			"BodyRotation",
+			"Grabbable",
+			"Weld",
+		},
+		[new() { Title = "Gizmos" }] = new()
+		{
+			"Marker3D",
+			"VoiceBox",
 		},
 	};
 
@@ -284,33 +302,33 @@ public partial class InsertMenuPopup : PopupPanel
 		}
 		else
 		{
-			// Default insert path
-			if (instance is Part)
+			switch (instance)
 			{
-				parentTo = World.Current.Environment;
-			}
-			else if (instance is Light)
-			{
-				parentTo = World.Current.Lighting;
-			}
-			else if (instance is UIField && instance is not GUI)
-			{
-				GUI? existingUI = (GUI?)World.Current.PlayerGUI.FindChild("GUI");
-				if (existingUI == null)
-				{
-					existingUI = World.Current.New<GUI>();
-					existingUI.Parent = World.Current.PlayerGUI;
-				}
+				// Default insert path
+				case Part:
+					parentTo = World.Current.Environment;
+					break;
+				case Light:
+					parentTo = World.Current.Lighting;
+					break;
+				case UIField when instance is not GUI:
+					{
+						GUI? existingUI = (GUI?)World.Current.PlayerGUI.FindChild("GUI");
+						if (existingUI == null)
+						{
+							existingUI = World.Current.New<GUI>();
+							existingUI.Parent = World.Current.PlayerGUI;
+						}
 
-				parentTo = existingUI;
-			}
-			else if (instance is Datamodel.Script)
-			{
-				parentTo = World.Current.ScriptService;
-			}
-			else
-			{
-				parentTo = World.Current.Environment;
+						parentTo = existingUI;
+						break;
+					}
+				case Script:
+					parentTo = World.Current.ScriptService;
+					break;
+				default:
+					parentTo = World.Current.Environment;
+					break;
 			}
 		}
 

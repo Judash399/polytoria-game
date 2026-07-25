@@ -282,6 +282,7 @@ public partial class Part : Entity
 		return new(center - worldExtents, worldExtents * 2);
 	}
 
+	[ScriptEnum("PartShape")]
 	public enum ShapeEnum
 	{
 		Brick = 0,
@@ -293,7 +294,13 @@ public partial class Part : Entity
 		Bevel = 6,
 		Concave = 7,
 		Truss = 8,
-		Frame = 9
+		Frame = 9,
+		Octant = 10,
+		Torus = 11,
+		BeveledCorner = 12,
+		ConcaveCorner = 13,
+		TriangleCorner = 14,
+		TriangleConcaveCorner = 15
 	}
 
 	[Attributes.Obsolete("This should not be used, it's here only for compatibility with legacy scripts.")]
@@ -311,6 +318,7 @@ public partial class Part : Entity
 		CornerWedge = 5,
 	}
 
+	[ScriptEnum]
 	[CreatorEnumOptions(SortOption = EnumSortOption.Alphabetical)]
 	public enum PartMaterialEnum
 	{

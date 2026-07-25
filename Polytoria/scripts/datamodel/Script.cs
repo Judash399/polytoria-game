@@ -5,6 +5,7 @@
 using Godot;
 using Polytoria.Attributes;
 using Polytoria.Datamodel.Resources;
+using Polytoria.Datamodel.Services;
 using Polytoria.Scripting;
 using System;
 using System.Collections.Generic;
@@ -19,7 +20,8 @@ public partial class Script : Instance
 	internal Scripting.Luau.LuaState? LuauState;
 	internal Scripting.Luau.LuaState? LuauMainThread;
 
-	internal byte[]? Bytecode;
+	[CloneInclude]
+	public byte[]? Bytecode { get; internal set; }
 
 	internal readonly Dictionary<object, int> LuauUserdataCache = [];
 	internal readonly HashSet<Scripting.Luau.LuaObject> LuauObjectCache = [];
@@ -131,7 +133,7 @@ public partial class Script : Instance
 	public void Stop()
 	{
 		if (!Ran) return;
-		Root?.ScriptService?.Close(this);
+		ScriptService.Close(this);
 	}
 
 	public override void PreDelete()

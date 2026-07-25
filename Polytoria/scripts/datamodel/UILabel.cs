@@ -6,6 +6,7 @@ using Godot;
 using Polytoria.Attributes;
 using Polytoria.Datamodel.Resources;
 using Polytoria.Enums;
+using Polytoria.Utils;
 
 namespace Polytoria.Datamodel;
 
@@ -18,6 +19,8 @@ public partial class UILabel : UIView
 	private string _text = "";
 	private Color _textColor;
 	private float _fontSize;
+	private bool _autoSize;
+	private float _maxAutoSize;
 	private bool _useRichText;
 	private TextHorizontalAlignmentEnum _justify;
 	private TextVerticalAlignmentEnum _verticalAlign;
@@ -39,6 +42,7 @@ public partial class UILabel : UIView
 			_text = value;
 			_richLabel.Text = _text;
 			_label.Text = _text;
+			UpdateText();
 			OnPropertyChanged();
 		}
 	}
@@ -142,17 +146,36 @@ public partial class UILabel : UIView
 		set
 		{
 			_fontSize = value;
-			int setto = (int)(_fontSize * FontScaleConversion);
-			_label.AddThemeFontSizeOverride("font_size", setto);
-			_richLabel.AddThemeFontSizeOverride("normal_font_size", setto);
-			_richLabel.AddThemeFontSizeOverride("bold_font_size", setto);
-			_richLabel.AddThemeFontSizeOverride("bold_italics_font_size", setto);
-			_richLabel.AddThemeFontSizeOverride("italics_font_size", setto);
-			_richLabel.AddThemeFontSizeOverride("mono_font_size", setto);
+			UpdateText();
 			OnPropertyChanged();
 		}
 	}
 
+	[Editable, ScriptProperty]
+	public bool AutoSize
+	{
+		get => _autoSize;
+		set
+		{
+			_autoSize = value;
+			if (_autoSize) NodeControl.Resized += UpdateText;
+			else NodeControl.Resized -= UpdateText;
+			UpdateText();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public float MaxAutoSize
+	{
+		get => _maxAutoSize;
+		set
+		{
+			_maxAutoSize = value;
+			UpdateText();
+			OnPropertyChanged();
+		}
+	}
 
 	[Editable, ScriptProperty]
 	public bool UseRichText
@@ -241,18 +264,42 @@ public partial class UILabel : UIView
 
 			_label.AutowrapMode = _richLabel.AutowrapMode = _textWrapped ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
 
+			UpdateText();
 			OnPropertyChanged();
 		}
+	}
+
+	private void UpdateText()
+	{
+		if (_autoSize)
+		{
+			float autoSize = TextUtils.BoundsToTextSize(_label.GetThemeFont("font"), _text, NodeControl.Size, _textWrapped) / FontScaleConversion;
+			if (_maxAutoSize > 0 && autoSize > _maxAutoSize) SetTextSize(_maxAutoSize);
+			else SetTextSize(autoSize);
+		}
+		else SetTextSize(_fontSize);
+	}
+
+	private void SetTextSize(float size)
+	{
+		int setto = (int)(size * FontScaleConversion);
+		_label.AddThemeFontSizeOverride("font_size", setto);
+		_richLabel.AddThemeFontSizeOverride("normal_font_size", setto);
+		_richLabel.AddThemeFontSizeOverride("bold_font_size", setto);
+		_richLabel.AddThemeFontSizeOverride("bold_italics_font_size", setto);
+		_richLabel.AddThemeFontSizeOverride("italics_font_size", setto);
+		_richLabel.AddThemeFontSizeOverride("mono_font_size", setto);
 	}
 
 	private void OnFontLoaded(Resource resource)
 	{
 		_label.AddThemeFontOverride("font", (Font)resource);
 		_richLabel.AddThemeFontOverride("normal_font", (Font)resource);
-		_richLabel.AddThemeFontOverride("bold_fonte", (Font)resource);
+		_richLabel.AddThemeFontOverride("bold_font", (Font)resource);
 		_richLabel.AddThemeFontOverride("bold_italics_font", (Font)resource);
 		_richLabel.AddThemeFontOverride("italics_font", (Font)resource);
 		_richLabel.AddThemeFontOverride("mono_font", (Font)resource);
+		UpdateText();
 	}
 
 	public override void Init()
@@ -269,10 +316,14 @@ public partial class UILabel : UIView
 		_label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
 		_label.ClipContents = false;
+		_label.MouseFilter = Control.MouseFilterEnum.Ignore;
+		_label.AddThemeConstantOverride("line_spacing", 0);
 
 		Text = "Text";
 		TextColor = new(0, 0, 0);
 		FontSize = 16;
+		AutoSize = false;
+		MaxAutoSize = 0;
 		HorizontalAlignment = TextHorizontalAlignmentEnum.Center;
 		VerticalAlignment = TextVerticalAlignmentEnum.Middle;
 		UseRichText = false;

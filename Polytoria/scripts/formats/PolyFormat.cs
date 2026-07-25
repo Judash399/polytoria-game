@@ -8,8 +8,10 @@ using Polytoria.Datamodel;
 using Polytoria.Datamodel.Data;
 using Polytoria.Datamodel.Resources;
 using Polytoria.Shared;
+using Polytoria.Utils;
 using Polytoria.Utils.Compression;
 using Polytoria.Utils.DTOs;
+using Semver;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -26,7 +28,7 @@ namespace Polytoria.Formats;
 
 public static partial class PolyFormat
 {
-	private static readonly ConditionalWeakTable<Type, Dictionary<string, PropertyInfo>> _propertyCache = new();
+	private static readonly ConditionalWeakTable<Type, Dictionary<string, PropertyInfo>> _propertyCache = [];
 
 	public static object? SerializePropValue(object? propValue)
 	{
@@ -107,6 +109,10 @@ public static partial class PolyFormat
 					return JsonSerializer.Deserialize(element.GetRawText(), PolyJSONGenerationContext.Default.Vector2);
 				if (targetType == typeof(Vector3))
 					return JsonSerializer.Deserialize(element.GetRawText(), PolyJSONGenerationContext.Default.Vector3);
+				if (targetType == typeof(Quaternion))
+					return JsonSerializer.Deserialize(element.GetRawText(), PolyJSONGenerationContext.Default.Quaternion);
+				if (targetType == typeof(Variant))
+					return JsonSerializer.Deserialize(element.GetRawText(), PolyJSONGenerationContext.Default.Variant);
 				break;
 		}
 
@@ -254,20 +260,20 @@ public static partial class PolyFormat
 		}
 	}
 
-	public static void LoadWorld(World root, byte[] rawdata)
+	public static void LoadWorld(World root, byte[] rawdata, bool forceMigrateCords = false)
 	{
 		// Empty world file
 		if (rawdata.Length == 0) return;
 
 		PolyRootData data = ReadRootDataBytes(rawdata);
-		InternalLoadWorld(root, data);
+		InternalLoadWorld(root, data, forceMigrateCords);
 	}
 
-	private static void InternalLoadWorld(World root, PolyRootData data)
+	private static void InternalLoadWorld(World root, PolyRootData data, bool forceMigrateCords = false)
 	{
 		Stopwatch sw = new();
 		sw.Start();
-		PolyLoadContext context = new() { RootData = data, Root = root };
+		PolyLoadContext context = new() { RootData = data, Root = root, ForceCordMigration = forceMigrateCords };
 
 		// Empty world
 		if (data.Objects == null || data.Objects.Length == 0) return;
@@ -570,6 +576,11 @@ public static partial class PolyFormat
 				val = DeserializePropValue(propVal, propType);
 			}
 
+			if (loadContext.ForceCordMigration)
+			{
+				MigrateAxis(propName, ref val);
+			}
+
 			try
 			{
 				property.SetValue(netObj, val);
@@ -584,10 +595,12 @@ public static partial class PolyFormat
 	private static Dictionary<string, PropertyInfo> GetOrCreatePropertyCache(
 		[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
 	{
-		return _propertyCache.GetValue(type, t =>
+		return _propertyCache.GetValue(type, static t =>
 		{
 			Dictionary<string, PropertyInfo> cache = [];
+#pragma warning disable IL2070 // Datamodel types has the reflections needed
 			PropertyInfo[] properties = t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+#pragma warning restore IL2070
 			foreach (PropertyInfo prop in properties)
 			{
 				if (prop.IsDefined(typeof(EditableAttribute)) || prop.IsDefined(typeof(SaveIncludeAttribute)))
@@ -610,7 +623,7 @@ public static partial class PolyFormat
 		IEnumerable<PropertyInfo> creatorProperties = obj.GetEditableProperties();
 
 		IEnumerable<PropertyInfo> saveIncludes = objType.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy)
-			.Where(p => p.GetCustomAttribute<SaveIncludeAttribute>() != null);
+			.Where(p => p.GetCustomAttributeCached<SaveIncludeAttribute>() != null);
 
 		HashSet<string> existingNames = [.. creatorProperties.Select(p => p.Name)];
 		creatorProperties = creatorProperties.Concat(
@@ -619,14 +632,14 @@ public static partial class PolyFormat
 
 		foreach (PropertyInfo prop in creatorProperties)
 		{
-			if (prop.IsDefined(typeof(Attributes.ObsoleteAttribute))) continue;
-			if (prop.IsDefined(typeof(SaveIgnoreAttribute))) continue;
+			if (prop.IsDefinedCached(typeof(Attributes.ObsoleteAttribute))) continue;
+			if (prop.IsDefinedCached(typeof(SaveIgnoreAttribute))) continue;
 			if (prop.CanRead)
 			{
 				object? val = prop.GetValue(obj);
 				if (val == null) continue;
 
-				DefaultValueAttribute? df = prop.GetCustomAttribute<DefaultValueAttribute>();
+				DefaultValueAttribute? df = prop.GetCustomAttributeCached<DefaultValueAttribute>();
 				if (df != null)
 				{
 					try
@@ -709,7 +722,7 @@ public static partial class PolyFormat
 				foreach (Instance child in instance.GetChildren())
 				{
 					Type ct = child.GetType();
-					if (ct.GetCustomAttribute<SaveIgnoreAttribute>() != null) continue;
+					if (ct.GetCustomAttributeCached<SaveIgnoreAttribute>() != null) continue;
 					if (child.ModelRoot != null && instance.EditableChildren)
 					{
 						// Save editable children
@@ -884,6 +897,7 @@ public static partial class PolyFormat
 		public HashSet<string> LoadingModelChain = [];
 		public Dictionary<string, string> IndexToFile = [];
 		public Dictionary<string, PolyRootData> LoadedModel = [];
+		public bool ForceCordMigration = false;
 	}
 
 	public partial class PolyRoot
@@ -943,11 +957,38 @@ public static partial class PolyFormat
 		return className;
 	}
 
+	public static void MigrateAxis(string propName, ref object? val)
+	{
+		if ((propName == nameof(Dynamic.Position) || propName == nameof(Dynamic.LocalPosition) || propName == nameof(Physical.Velocity)) && val is Vector3 v3)
+		{
+			val = v3.Flip();
+		}
+		else if ((propName == nameof(Dynamic.Rotation) || propName == nameof(Dynamic.LocalRotation) || propName == nameof(Physical.AngularVelocity)) && val is Vector3 vrot3)
+		{
+			val = vrot3.FlipEuler();
+		}
+		else if ((propName == nameof(UIField.Rotation)) && val is float f)
+		{
+			val = -f;
+		}
+		else if ((propName == nameof(UIField.PositionRelative) || propName == nameof(UIField.PivotPoint)) && val is Vector2 v2)
+		{
+			val = new Vector2(v2.X, 1 - v2.Y);
+		}
+		else if ((propName == nameof(UIField.PositionOffset)) && val is Vector2 vo2)
+		{
+			val = new Vector2(vo2.X, -vo2.Y);
+		}
+	}
+
 	[JsonSourceGenerationOptions(WriteIndented = true, Converters = [
 		typeof(Vector2JsonConverter),
 		typeof(Vector3JsonConverter),
+		typeof(UnitQuaternionUInt64JsonConverter),
+		typeof(VariantJsonConverter),
 		typeof(ColorJsonConverter),
 		typeof(ColorSeriesJsonConverter),
+		typeof(NumberSeriesJsonConverter),
 		typeof(NumberRangeJsonConverter)
 		], NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
 	[JsonSerializable(typeof(string))]
@@ -966,10 +1007,16 @@ public static partial class PolyFormat
 
 	[JsonSerializable(typeof(Vector2))]
 	[JsonSerializable(typeof(Vector3))]
+	[JsonSerializable(typeof(Quaternion))]
 	[JsonSerializable(typeof(Color))]
+	[JsonSerializable(typeof(Variant))]
 
 	[JsonSerializable(typeof(ColorSeries))]
+	[JsonSerializable(typeof(NumberSeries))]
 	[JsonSerializable(typeof(NumberRange))]
+	[JsonSerializable(typeof(UIScale))]
+	[JsonSerializable(typeof(ShadowLayer))]
+	[JsonSerializable(typeof(ShadowLayer[]))]
 
 	[JsonSerializable(typeof(string[]))]
 	[JsonSerializable(typeof(byte[]))]

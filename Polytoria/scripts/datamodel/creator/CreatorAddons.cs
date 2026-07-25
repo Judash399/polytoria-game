@@ -95,7 +95,7 @@ public sealed partial class CreatorAddons : Instance
 		public readonly List<AddonToolItem> ToolItems = [];
 
 		[ScriptMethod]
-		public async Task RequestPermissions([ScriptingCaller] Script caller, AddonPermissionEnum[] perms)
+		public static async Task RequestPermissions([ScriptingCaller] Script caller, AddonPermissionEnum[] perms)
 		{
 			var data = AddonsManager.GetAddonSession(caller);
 			if (data != null)
@@ -132,6 +132,7 @@ public sealed partial class CreatorAddons : Instance
 		[ScriptProperty] public PTSignal Pressed { get; private set; } = new();
 	}
 
+	[ScriptEnum(IsCreatorOnly = true)]
 	public enum AddonPermissionEnum
 	{
 		IORead,

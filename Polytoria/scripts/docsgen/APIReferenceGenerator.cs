@@ -11,6 +11,7 @@ using Polytoria.Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -48,8 +49,10 @@ public class APIReferenceGenerator
 				apiRef.InstanceClasses.Add(ProcessClassName(type));
 			}
 
+#pragma warning disable IL2075 // Datamodel types has the reflections needed
 			PropertyInfo[] properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
 			MethodInfo[] methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
+#pragma warning restore IL2075
 
 			List<ScriptProperty> propertiesDef = [];
 			List<ScriptMethod> methodsDef = [];
@@ -172,6 +175,7 @@ public class APIReferenceGenerator
 					Parameters = paramsDef,
 					IsObsolete = method.GetCustomAttribute<Attributes.ObsoleteAttribute>() != null,
 					IsStatic = method.IsStatic,
+					IsSemiStatic = method.IsStatic && (methodAttribute?.SemiStatic ?? false),
 				};
 
 				methodsDef.Add(methodDef);
@@ -225,7 +229,7 @@ public class APIReferenceGenerator
 		}
 
 		// Order classes by inheritance hierarchy
-		List<ScriptClass> orderedClasses = OrderClassesByInheritance(classMap, types);
+		List<ScriptClass> orderedClasses = OrderClassesByInheritance(classMap);
 		apiRef.Classes = orderedClasses;
 
 		foreach ((string key, Type enumType) in ScriptService.EnumMap)
@@ -273,7 +277,7 @@ public class APIReferenceGenerator
 		};
 	}
 
-	private static List<ScriptClass> OrderClassesByInheritance(Dictionary<Type, ScriptClass> classMap, Type[] allTypes)
+	private static List<ScriptClass> OrderClassesByInheritance(Dictionary<Type, ScriptClass> classMap)
 	{
 		List<ScriptClass> result = [];
 		HashSet<Type> processed = [];
@@ -491,6 +495,14 @@ public class APIReferenceGenerator
 			return null;
 		}
 
+		if (type.IsEnum)
+		{
+			// Find the Enum's external name
+			string name = ScriptService.EnumMap.FirstOrDefault(x => x.Value == type).Key;
+			if (!string.IsNullOrEmpty(name))
+				return name;
+		}
+
 		return type.Name;
 	}
 
@@ -510,6 +522,7 @@ public class APIReferenceGenerator
 		public bool IsAsync;
 		public bool IsObsolete;
 		public bool IsStatic;
+		public bool IsSemiStatic;
 	}
 
 	public struct ScriptProperty

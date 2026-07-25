@@ -7,8 +7,11 @@ using Polytoria.Attributes;
 using Polytoria.Datamodel.Data;
 using Polytoria.Datamodel.Resources;
 using Polytoria.Enums;
-using Polytoria.Utils;
 using System;
+
+#if CREATOR
+using Polytoria.Creator.Spatial;
+#endif
 
 namespace Polytoria.Datamodel;
 
@@ -26,14 +29,46 @@ public sealed partial class Particles : Dynamic
 	private ColorSeries _color = new();
 	private NumberRange _lifetime = new() { Min = 0.5f, Max = 1f };
 	private int _amount = 8;
+	private float _explosiveness = 0;
 	private Vector3 _gravity;
 	private Vector3 _velocityDirection;
 	private NumberRange _initialVelocity;
 	private NumberRange _startRotation;
+
+	private NumberRange _angularVelocity;
+	private NumberSeries _angularVelocityOverLifetime = new(0f, 0f);
+
+	private NumberRange _linearAcceleration;
+	private NumberSeries _linearAccelerationOverLifetime = new(0f, 0f);
+
+	private NumberRange _radialAcceleration;
+	private NumberSeries _radialAccelerationOverLifetime = new(0f, 0f);
+
+	private NumberRange _tangentialAcceleration;
+	private NumberSeries _tangentialAccelerationOverLifetime = new(0f, 0f);
+
+	private NumberRange _orbitalVelocity;
+	private NumberSeries _orbitalVelocityOverLifetime = new(0f, 0f);
+
+
+	private NumberRange _damping;
+	private NumberSeries _dampingOverLifetime = new(0f, 0f);
+
+	private NumberRange _scaleOverVelocity;
+	private NumberSeries _scaleOverVelocityCurve = new(1f, 1f);
+
+	private bool _turbulenceEnabled;
+	private NumberRange _turbulenceInfluence = new(0.1f, 0.1f);
+	private NumberSeries _turbulenceOverLifetime = new(0f, 0f);
+	private float _turbulenceNoiseScale = 9f;
+	private float _turbulenceNoiseStrength = 1f;
+	private Vector3 _turbulenceNoiseSpeed = new();
+
 	private float _spread = 45;
 	private float _flatness = 0;
-	private NumberRange _scale;
-	private NumberRange _hueVariation;
+	private NumberRange _scale = new(1f, 1f);
+	private NumberSeries _scaleOverLifetime = new(1f, 1f);
+	private NumberRange _hueVariation = new(0f, 0f);
 	private ParticleSimulationSpaceEnum _simulationSpace;
 	private ParticleEmissionShapeEnum _emissionShape;
 	private ParticleOrientationEnum _orientation;
@@ -44,13 +79,29 @@ public sealed partial class Particles : Dynamic
 	private Godot.Mesh _mesh = null!;
 	private StandardMaterial3D _material = null!;
 
+	private bool _paused;
+	private float _speedScale = 1f;
+	private float _previousSpeedScale = 1f;
+
 	[Editable, ScriptProperty]
 	public bool Playing
 	{
 		get => _particles.Emitting;
 		set
 		{
-			_particles.Emitting = value;
+			if (value) Play();
+			else Stop();
+		}
+	}
+
+	[Editable, ScriptProperty, DefaultValue(1f)]
+	public float SpeedScale
+	{
+		get => _speedScale;
+		set
+		{
+			_speedScale = value;
+			_particles.SpeedScale = value;
 			OnPropertyChanged();
 		}
 	}
@@ -95,7 +146,9 @@ public sealed partial class Particles : Dynamic
 			_material.TextureFilter = value switch
 			{
 				TextureFilterEnum.Nearest => BaseMaterial3D.TextureFilterEnum.NearestWithMipmaps,
+				TextureFilterEnum.NearestNoMipmaps => BaseMaterial3D.TextureFilterEnum.Nearest,
 				TextureFilterEnum.Linear => BaseMaterial3D.TextureFilterEnum.LinearWithMipmaps,
+				TextureFilterEnum.LinearNoMipmaps => BaseMaterial3D.TextureFilterEnum.Linear,
 				_ => throw new IndexOutOfRangeException("Texture filter mode out of range"),
 			};
 			OnPropertyChanged();
@@ -146,13 +199,25 @@ public sealed partial class Particles : Dynamic
 	}
 
 	[Editable, ScriptProperty]
+	public float Explosiveness
+	{
+		get => _explosiveness;
+		set
+		{
+			_explosiveness = value;
+			_particles.Explosiveness = value;
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
 	public Vector3 Gravity
 	{
 		get => _gravity;
 		set
 		{
 			_gravity = value;
-			_particle.Gravity = _gravity.Flip();
+			_particle.Gravity = _gravity;
 
 			OnPropertyChanged();
 		}
@@ -166,7 +231,7 @@ public sealed partial class Particles : Dynamic
 		{
 			_velocityDirection = value;
 
-			_particle.Direction = _velocityDirection.Flip();
+			_particle.Direction = _velocityDirection;
 
 			OnPropertyChanged();
 		}
@@ -198,6 +263,278 @@ public sealed partial class Particles : Dynamic
 			_particle.AngleMin = _startRotation.Min;
 			_particle.AngleMax = _startRotation.Max;
 
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange AngularVelocity
+	{
+		get => _angularVelocity;
+		set
+		{
+			_angularVelocity = value;
+
+			_particle.AngularVelocityMin = _angularVelocity.Min;
+			_particle.AngularVelocityMax = _angularVelocity.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries AngularVelocityOverLifetime
+	{
+		get => _angularVelocityOverLifetime;
+		set
+		{
+			_angularVelocityOverLifetime = value;
+			_particle.AngularVelocityCurve = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange LinearAcceleration
+	{
+		get => _linearAcceleration;
+		set
+		{
+			_linearAcceleration = value;
+
+			_particle.LinearAccelMin = _linearAcceleration.Min;
+			_particle.LinearAccelMax = _linearAcceleration.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries LinearAccelerationOverLifetime
+	{
+		get => _linearAccelerationOverLifetime;
+		set
+		{
+			_linearAccelerationOverLifetime = value;
+			_particle.LinearAccelCurve = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange RadialAcceleration
+	{
+		get => _radialAcceleration;
+		set
+		{
+			_radialAcceleration = value;
+
+			_particle.RadialAccelMin = _radialAcceleration.Min;
+			_particle.RadialAccelMax = _radialAcceleration.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries RadialAccelerationOverLifetime
+	{
+		get => _radialAccelerationOverLifetime;
+		private set
+		{
+			_radialAccelerationOverLifetime = value;
+			_particle.RadialAccelCurve = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange TangentialAcceleration
+	{
+		get => _tangentialAcceleration;
+		set
+		{
+			_tangentialAcceleration = value;
+
+			_particle.TangentialAccelMin = _tangentialAcceleration.Min;
+			_particle.TangentialAccelMax = _tangentialAcceleration.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries TangentialAccelerationOverLifetime
+	{
+		get => _tangentialAccelerationOverLifetime;
+		private set
+		{
+			_tangentialAccelerationOverLifetime = value;
+			_particle.TangentialAccelCurve = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange OrbitalVelocity
+	{
+		get => _orbitalVelocity;
+		set
+		{
+			_orbitalVelocity = value;
+
+			_particle.OrbitVelocityMin = _orbitalVelocity.Min;
+			_particle.OrbitVelocityMax = _orbitalVelocity.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries OrbitalVelocityOverLifetime
+	{
+		get => _orbitalVelocityOverLifetime;
+		private set
+		{
+			_orbitalVelocityOverLifetime = value;
+			_particle.OrbitVelocityCurve = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange Damping
+	{
+		get => _damping;
+		set
+		{
+			_damping = value;
+
+			_particle.DampingMin = _damping.Min;
+			_particle.DampingMax = _damping.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries DampingOverLifetime
+	{
+		get => _dampingOverLifetime;
+		private set
+		{
+			_dampingOverLifetime = value;
+			_particle.DampingCurve = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange ScaleOverVelocity
+	{
+		get => _scaleOverVelocity;
+		set
+		{
+			_scaleOverVelocity = value;
+
+			_particle.ScaleOverVelocityMin = _scaleOverVelocity.Min;
+			_particle.ScaleOverVelocityMax = _scaleOverVelocity.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries ScaleOverVelocityCurve
+	{
+		get => _scaleOverVelocityCurve;
+		private set
+		{
+			_scaleOverVelocityCurve = value;
+
+			bool allZero = true;
+			float[] vals = value.GetValues();
+			for (int i = 0; i < vals.Length; i++)
+			{
+				if (vals[i] != 0f) { allZero = false; break; }
+			}
+			_particle.ScaleOverVelocityCurve = allZero ? null : value.ToCurveTexture();
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public bool TurbulenceEnabled
+	{
+		get => _turbulenceEnabled;
+		set
+		{
+			_turbulenceEnabled = value;
+			_particle.TurbulenceEnabled = _turbulenceEnabled;
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberRange TurbulenceInfluence
+	{
+		get => _turbulenceInfluence;
+		set
+		{
+			_turbulenceInfluence = value;
+
+			_particle.TurbulenceInfluenceMin = _turbulenceInfluence.Min;
+			_particle.TurbulenceInfluenceMax = _turbulenceInfluence.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries TurbulenceOverLifetime
+	{
+		get => _turbulenceOverLifetime;
+		private set
+		{
+			_turbulenceOverLifetime = value;
+			_particle.TurbulenceInfluenceOverLife = value.ToCurveTexture();
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public float TurbulenceNoiseScale
+	{
+		get => _turbulenceNoiseScale;
+		set
+		{
+			_turbulenceNoiseScale = value;
+			_particle.TurbulenceNoiseScale = _turbulenceNoiseScale;
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public float TurbulenceNoiseStrength
+	{
+		get => _turbulenceNoiseStrength;
+		set
+		{
+			_turbulenceNoiseStrength = value;
+			_particle.TurbulenceNoiseStrength = _turbulenceNoiseStrength;
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public Vector3 TurbulenceNoiseSpeed
+	{
+		get => _turbulenceNoiseSpeed;
+		set
+		{
+			_turbulenceNoiseSpeed = value;
+			_particle.TurbulenceNoiseSpeed = _turbulenceNoiseSpeed;
 			OnPropertyChanged();
 		}
 	}
@@ -240,6 +577,26 @@ public sealed partial class Particles : Dynamic
 
 			_particle.ScaleMin = _scale.Min;
 			_particle.ScaleMax = _scale.Max;
+
+			OnPropertyChanged();
+		}
+	}
+
+	[Editable, ScriptProperty]
+	public NumberSeries ScaleOverLifetime
+	{
+		get => _scaleOverLifetime;
+		set
+		{
+			_scaleOverLifetime = value;
+
+			bool allZero = true;
+			float[] vals = value.GetValues();
+			for (int i = 0; i < vals.Length; i++)
+			{
+				if (vals[i] != 0f) { allZero = false; break; }
+			}
+			_particle.ScaleCurve = allZero ? null : value.ToCurveTexture();
 
 			OnPropertyChanged();
 		}
@@ -356,6 +713,15 @@ public sealed partial class Particles : Dynamic
 		}
 	}
 
+	[ScriptProperty]
+	public bool IsPlaying => _particles.Emitting && !_paused;
+
+	[ScriptProperty]
+	public bool IsPaused => _paused;
+
+	[ScriptProperty]
+	public bool IsStopped => !_particles.Emitting && !_paused;
+
 	private void OnResourceLoaded(Resource tex)
 	{
 		_material.AlbedoTexture = (Texture2D)tex;
@@ -363,6 +729,9 @@ public sealed partial class Particles : Dynamic
 
 	public override void Init()
 	{
+#if CREATOR
+		GDNode.AddChild(new SpatialIcon(ClassName), @internal: Node.InternalMode.Back);
+#endif
 		base.Init();
 		_particle = new();
 		GDNode3D.AddChild(_particles = new() { ProcessMaterial = _particle }, false, Node.InternalMode.Front);
@@ -404,6 +773,8 @@ public sealed partial class Particles : Dynamic
 		EmissionShapeScale = Vector3.One;
 		BlendMode = BlendModeEnum.Mix;
 		Orientation = ParticleOrientationEnum.FaceCamera;
+		ScaleOverLifetime = new(1f, 1f);
+		ScaleOverVelocityCurve = new(1f, 1f);
 		base.InitOverrides();
 	}
 
@@ -429,17 +800,37 @@ public sealed partial class Particles : Dynamic
 	[ScriptMethod]
 	public void Play()
 	{
-		Playing = true;
+		_paused = false;
+		SpeedScale = _previousSpeedScale <= 0 ? 1f : _previousSpeedScale;
+		_particles.Emitting = true;
+		OnPropertyChanged(nameof(Playing));
 	}
 
-	// cannot pause in godot
-	[ScriptLegacyMethod("Pause")]
-	public void LegacyPause() { }
+	[ScriptMethod]
+	public void Pause()
+	{
+		if (_paused) return;
+
+		_previousSpeedScale = _speedScale;
+		SpeedScale = 0f;
+		_paused = true;
+	}
 
 	[ScriptMethod]
 	public void Stop()
 	{
-		Playing = false;
+		_paused = false;
+		SpeedScale = _previousSpeedScale <= 0 ? 1f : _previousSpeedScale;
+		_particles.Emitting = false;
+		OnPropertyChanged(nameof(Playing));
+	}
+
+	[ScriptMethod]
+	public void Clear()
+	{
+		bool wasEmitting = _particles.Emitting;
+		_particles.Restart();
+		_particles.Emitting = wasEmitting && !_paused;
 	}
 
 	[ScriptMethod]
@@ -467,12 +858,14 @@ public sealed partial class Particles : Dynamic
 		temp.Finished += finishEmit;
 	}
 
+	[ScriptEnum]
 	public enum ParticleSimulationSpaceEnum
 	{
 		Local,
 		World
 	}
 
+	[ScriptEnum]
 	public enum ParticleEmissionShapeEnum
 	{
 		Point,
@@ -482,6 +875,7 @@ public sealed partial class Particles : Dynamic
 		Ring
 	}
 
+	[ScriptEnum]
 	public enum ParticleOrientationEnum
 	{
 		FaceCamera,

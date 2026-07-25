@@ -371,11 +371,19 @@ public sealed partial class Menu : PanelContainer
 				new MenuSeperatorItem(),
 				new MenuButtonItem() {
 					Text = "Manage Addons",
-					Pressed = CreatorService.Interface.PopupManageAddons
+					Pressed = CreatorInterface.PopupManageAddons
 				},
 				new MenuAddonSlotItem() {
 					Text = "Addons",
 					RequireGameOpen = true
+				},
+				new MenuSeperatorItem(),
+				new MenuButtonItem() {
+					Text = "Migrate Coordinates",
+					RequireGameOpen = true,
+					Pressed = () => {
+						CreatorService.MigrateCoordinates(World.Current!);
+					}
 				},
 				new MenuSeperatorItem(),
 				new MenuButtonItem() {
@@ -481,7 +489,7 @@ public sealed partial class Menu : PanelContainer
 			mbtn.Button = btnRoot;
 			mbtn.Popup = menu;
 
-			menu.IdPressed += (long idx) =>
+			menu.IdPressed += idx =>
 			{
 				if (mbtn.IdToItem[(int)idx] is MenuButtonItem btn)
 				{

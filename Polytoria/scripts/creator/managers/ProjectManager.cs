@@ -25,7 +25,7 @@ namespace Polytoria.Creator.Managers;
 public static class ProjectManager
 {
 	private const string RecentsPath = "user://creator/recents";
-	private const string ProjectTemplatesPath = "res://modules/project-templates/";
+	private const string ProjectTemplatesPath = "res://modules/creator/world-templates/";
 	private const string GitIgnoreContent = "# Polytoria specific ignores\n.poly/\n";
 
 	public static async Task<RecentData[]> GetRecents(bool loadData = true)
@@ -48,18 +48,28 @@ public static class ProjectManager
 					string projectMetaFile = Path.GetFullPath(Path.Join(r.FolderPath, Globals.ProjectMetaFileName));
 					if (!File.Exists(projectMetaFile)) continue;
 
-					tasks.Add(Task.Run(async () =>
+					tasks.Add(Task.Run(() =>
 					{
-						string projectTxt = File.ReadAllText(projectMetaFile);
-						CreatorProjectMetadata metadata = JsonSerializer.Deserialize(projectTxt, ProjectJSONGenerationContext.Default.CreatorProjectMetadata);
-
-						finalData.Add(new()
+						try
 						{
-							PlaceName = metadata.ProjectName,
-							IconID = metadata.IconID,
-							FolderPath = r.FolderPath,
-							LastOpened = r.LastOpened
-						});
+							string projectTxt = File.ReadAllText(projectMetaFile);
+							CreatorProjectMetadata metadata = JsonSerializer.Deserialize(projectTxt, ProjectJSONGenerationContext.Default.CreatorProjectMetadata);
+
+							lock (finalData)
+							{
+								finalData.Add(new()
+								{
+									PlaceName = metadata.ProjectName,
+									IconID = metadata.IconID,
+									FolderPath = r.FolderPath,
+									LastOpened = r.LastOpened
+								});
+							}
+						}
+						catch (Exception ex)
+						{
+							PT.Print($"failed to load recent project: {ex.Message}");
+						}
 					}));
 				}
 				else

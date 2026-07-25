@@ -11,6 +11,12 @@ public sealed partial class AudioSettingsApplier : Node
 		ApplyAll();
 	}
 
+	public override void _ExitTree()
+	{
+		ClientSettingsService.Instance?.Changed -= OnChanged;
+		base._ExitTree();
+	}
+
 	private void OnChanged(SettingChangedEvent change)
 	{
 		switch (change.Key)
@@ -21,12 +27,12 @@ public sealed partial class AudioSettingsApplier : Node
 		}
 	}
 
-	private void ApplyAll()
+	private static void ApplyAll()
 	{
 		ApplyVolume();
 	}
 
-	private void ApplyVolume()
+	private static void ApplyVolume()
 	{
 		float volume = ClientSettingsService.Instance.Get<float>(ClientSettingKeys.General.MasterVolume);
 		AudioServer.SetBusVolumeDb(0, Mathf.LinearToDb(volume / 100f));

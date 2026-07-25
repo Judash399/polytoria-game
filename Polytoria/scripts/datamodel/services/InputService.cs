@@ -10,7 +10,6 @@ using Polytoria.Enums;
 using Polytoria.Networking;
 using Polytoria.Scripting;
 using Polytoria.Shared;
-using Polytoria.Utils;
 using System;
 using System.Collections.Generic;
 using static Polytoria.Datamodel.Environment;
@@ -69,14 +68,16 @@ public sealed partial class InputService : Instance
 			RecomputeMouseMode();
 		}
 	}
-
-	[ScriptProperty] public Vector2 MousePosition => OverrideMousePos ? OverrideMousePosTo : GDNode.GetViewport().GetMousePosition().Flip();
+	[ScriptProperty] public Vector2 MouseDelta { get; private set; } = Vector2.Zero;
+	[ScriptProperty] public Vector2 MousePosition => OverrideMousePos ? OverrideMousePosTo : GDNode.GetViewport().GetMousePosition();
 	[ScriptLegacyProperty("MousePosition")] public Vector3 LegacyMousePosition => new(MousePosition.X, ScreenHeight - MousePosition.Y, 0);
 	[ScriptProperty] public int ScreenWidth => (int)GDNode.GetViewport().GetVisibleRect().Size.X;
 	[ScriptProperty] public int ScreenHeight => (int)GDNode.GetViewport().GetVisibleRect().Size.Y;
 
 	internal bool OverrideMousePos { get; set; }
 	internal Vector2 OverrideMousePosTo { get; set; }
+
+	[ScriptProperty] public PTSignal<Vector2> MouseMoved { get; private set; } = new();
 
 	[ScriptProperty] public PTSignal GameFocused { get; private set; } = new();
 	[ScriptProperty] public PTSignal GameUnfocused { get; private set; } = new();
@@ -224,6 +225,7 @@ public sealed partial class InputService : Instance
 	private readonly Dictionary<MouseButton, bool> _mouseBtnDown = [];
 	private readonly Dictionary<MouseButton, bool> _mouseFrameBtnDown = [];
 	private float _mouseScrollDelta = 0;
+	private Vector2 _lastMouseDelta = Vector2.Zero;
 
 	public override void Init()
 	{
@@ -373,6 +375,7 @@ public sealed partial class InputService : Instance
 			RecomputeMouseMode();
 		}
 		ProcessInputs();
+		RecomputeMouseAxis();
 		base.Process(delta);
 	}
 
@@ -381,6 +384,7 @@ public sealed partial class InputService : Instance
 		_legacyFrameKeydowns.Clear();
 		_mouseFrameBtnDown.Clear();
 		_mouseScrollDelta = 0;
+		MouseDelta = Vector2.Zero;
 	}
 
 	private void RecomputeMouseMode()
@@ -390,7 +394,12 @@ public sealed partial class InputService : Instance
 			Input.MouseMode = Input.MouseModeEnum.Visible;
 			return;
 		}
-		Input.MouseMode = _cursorLocked ? Input.MouseModeEnum.Captured : (_cursorVisible ? Input.MouseModeEnum.Visible : Input.MouseModeEnum.Hidden);
+		Camera? cam = Root.Environment.CurrentCamera;
+		bool camCapturing = cam?.IsTurning ?? false;
+
+		Input.MouseMode = (_cursorLocked || camCapturing)
+			? Input.MouseModeEnum.Captured
+			: (_cursorVisible ? Input.MouseModeEnum.Visible : Input.MouseModeEnum.Hidden);
 	}
 
 	private bool RecomputeGameFocused()
@@ -415,12 +424,40 @@ public sealed partial class InputService : Instance
 		return focusOwner == null;
 	}
 
+	private void RecomputeMouseAxis()
+	{
+		float oldYVal = _lastMouseDelta.Y;
+		float oldXVal = _lastMouseDelta.X;
+		float axisYVal = MouseDelta.Y;
+		float axisXVal = MouseDelta.X;
+
+		if (oldXVal != axisXVal && Enum.TryParse("MouseAxisX", false, out KeyCodeEnum axisEnumX))
+		{
+			_keyWeight[axisEnumX] = axisXVal;
+			AxisValueChanged.Invoke(axisEnumX, axisXVal);
+			_lastMouseDelta.X = axisXVal;
+		}
+
+		if (oldYVal != axisYVal && Enum.TryParse("MouseAxisY", false, out KeyCodeEnum axisEnumY))
+		{
+			_keyWeight[axisEnumY] = axisYVal;
+			AxisValueChanged.Invoke(axisEnumY, axisYVal);
+			_lastMouseDelta.Y = axisYVal;
+		}
+	}
+
 	public void OnInput(Godot.InputEvent @event)
 	{
 		if (@event.IsEcho()) return;
 		if (IsGameFocused)
 		{
 			GodotInputEvent?.Invoke(@event);
+		}
+
+		if (@event is InputEventMouseMotion mouseMotion)
+		{
+			MouseDelta = mouseMotion.Relative;
+			MouseMoved.Invoke(mouseMotion.Relative);
 		}
 
 		KeyCodeEnum? btnEnumPre = InputEventToKeyCode(@event);
@@ -472,12 +509,6 @@ public sealed partial class InputService : Instance
 		else if (@event is InputEventJoypadMotion joypadMotion)
 		{
 			float axisVal = joypadMotion.AxisValue;
-
-			// flip em axis. (up thumbstick: -1 -> 1)
-			if (joypadMotion.Axis == JoyAxis.LeftY || joypadMotion.Axis == JoyAxis.RightY)
-			{
-				axisVal = -axisVal;
-			}
 
 			_keyWeight[btnEnum] = axisVal;
 			AxisValueChanged.Invoke(btnEnum, axisVal);
@@ -556,6 +587,18 @@ public sealed partial class InputService : Instance
 	}
 
 	[ScriptMethod]
+	public void StartGamepadVibration(float weakMagnitude, float strongMagnitude, float duration)
+	{
+		Input.StartJoyVibration(0, weakMagnitude, strongMagnitude, duration);
+	}
+
+	[ScriptMethod]
+	public void StopGamepadVibration()
+	{
+		Input.StopJoyVibration(0);
+	}
+
+	[ScriptMethod]
 	public Vector3 GetMouseWorldPosition(Instance[]? ignoreList = null)
 	{
 		Viewport viewport = GDNode.GetViewport();
@@ -563,11 +606,11 @@ public sealed partial class InputService : Instance
 		if (camera == null || viewport == null)
 			return Vector3.Zero;
 
-		Vector2 mousePos = MousePosition.Flip();
+		Vector2 mousePos = MousePosition;
 		Vector3 rayOrigin = camera.ProjectRayOrigin(mousePos);
 		Vector3 rayDir = camera.ProjectRayNormal(mousePos);
 
-		RayResult? hit = Root.Environment.Raycast(rayOrigin.Flip(), rayDir.Flip(), ignoreList: ignoreList);
+		RayResult? hit = Root.Environment.Raycast(rayOrigin, rayDir, ignoreList: ignoreList);
 		return hit != null ? hit.Value.Position : rayOrigin + rayDir * 1000f;
 	}
 
@@ -799,7 +842,7 @@ public sealed partial class InputService : Instance
 		Vector3 rayOrigin = camera.ProjectRayOrigin(mousePos);
 		Vector3 rayDir = camera.ProjectRayNormal(mousePos);
 
-		return (rayOrigin + rayDir * z).Flip();
+		return (rayOrigin + rayDir * z);
 	}
 
 	[ScriptLegacyMethod("ScreenToWorldPoint")]
@@ -812,7 +855,7 @@ public sealed partial class InputService : Instance
 
 		Vector3 rayOrigin = camera.ProjectRayOrigin(new Vector2(pos.X, pos.Y));
 		Vector3 rayDir = camera.ProjectRayNormal(new Vector2(pos.X, pos.Y));
-		return (rayOrigin + rayDir * pos.Z).Flip();
+		return (rayOrigin + rayDir * pos.Z);
 	}
 
 	[ScriptLegacyMethod("ScreenToViewportPoint")]
@@ -860,7 +903,7 @@ public sealed partial class InputService : Instance
 		Vector2 screenPos = new(pos.X * size.X, pos.Y * size.Y);
 		Vector3 origin = camera.ProjectRayOrigin(screenPos);
 		Vector3 direction = camera.ProjectRayNormal(screenPos);
-		return (origin + direction * pos.Z).Flip();
+		return (origin + direction * pos.Z);
 	}
 
 	[ScriptLegacyMethod("ViewportToScreenPoint")]
